@@ -5,13 +5,16 @@ uniform float uTime;
 uniform float uTipCount;
 uniform vec2 uTips[10];
 uniform float uTipEnergy[10];
+uniform vec3 uTint;
 
 vec3 palette(float t) {
   vec3 a = vec3(0.20, 0.18, 0.28);
   vec3 b = vec3(0.55, 0.35, 0.70);
   vec3 c = vec3(0.90, 0.55, 0.25);
   vec3 d = vec3(0.15, 0.65, 0.85);
-  return a + b * cos(6.28318 * (c * t + d));
+  vec3 base = a + b * cos(6.28318 * (c * t + d));
+  // Gentle palette bias toward selected tint (futuristic, not neon flood)
+  return mix(base, base * (0.55 + 0.85 * uTint), 0.42);
 }
 
 void main() {
@@ -49,12 +52,11 @@ void main() {
   vec3 col = palette(t);
 
   float core = exp(-55.0 * nearest);
-  col += vec3(1.0, 0.85, 0.55) * core * 0.45 * step(0.5, count);
+  col += mix(vec3(1.0, 0.85, 0.55), uTint, 0.55) * core * 0.45 * step(0.5, count);
 
   float vig = smoothstep(1.2, 0.25, length(uv - 0.5));
   col *= 0.35 + 0.65 * vig;
 
-  // Soft idle when no energy left (count may still be >0 during decay)
   float energySum = 0.0;
   for (int i = 0; i < 10; i++) {
     energySum += step(float(i) + 0.5, count) * uTipEnergy[i];
@@ -62,6 +64,7 @@ void main() {
   float idle = 1.0 - smoothstep(0.02, 0.12, energySum);
   float n = sin(uv.x * 12.0 + uTime * 0.3) * sin(uv.y * 10.0 - uTime * 0.25);
   vec3 idleCol = mix(vec3(0.07, 0.07, 0.10), vec3(0.12, 0.10, 0.18), 0.5 + 0.5 * n);
+  idleCol = mix(idleCol, idleCol * (0.6 + 0.5 * uTint), 0.25);
   col = mix(col, idleCol, idle);
 
   gl_FragColor = vec4(col, 1.0);

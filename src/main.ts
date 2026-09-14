@@ -4,6 +4,7 @@ import { TipSmoother } from './field/TipSmoother';
 import { FingerFieldRenderer } from './shaders/FingerFieldRenderer';
 import { HandTracker, type TrackedTip } from './tracking/HandTracker';
 import { SettingsPanel } from './ui/SettingsPanel';
+import { PalettePanel } from './ui/PalettePanel';
 
 const canvas = document.getElementById('gl') as HTMLCanvasElement;
 const video = document.getElementById('webcam') as HTMLVideoElement;
@@ -22,6 +23,8 @@ const settings = new FieldSettings();
 const smoother = new TipSmoother();
 const renderer = new FingerFieldRenderer(canvas);
 new SettingsPanel(settings);
+const palette = new PalettePanel();
+palette.onChange(([r, g, b]) => renderer.setTint(r, g, b));
 
 function syncOverlaySize(): void {
   const w = wrap.clientWidth;

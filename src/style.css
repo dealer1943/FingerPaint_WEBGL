@@ -156,3 +156,163 @@ html, body, #app {
   color: #f0f0f0;
   font-size: 13px;
 }
+
+
+/* —— Left futuristic palette —— */
+#palette-root {
+  position: absolute;
+  left: 0;
+  top: 50%;
+  transform: translateY(-50%);
+  z-index: 25;
+  display: flex;
+  flex-direction: row;
+  align-items: stretch;
+  pointer-events: none;
+}
+
+#palette-toggle {
+  pointer-events: auto;
+  width: 22px;
+  align-self: center;
+  height: 72px;
+  margin: 0;
+  border: 1px solid rgba(120, 200, 255, 0.28);
+  border-left: none;
+  border-radius: 0 10px 10px 0;
+  background: linear-gradient(180deg, rgba(12,16,24,0.75), rgba(8,10,16,0.88));
+  backdrop-filter: blur(10px);
+  cursor: pointer;
+  display: grid;
+  place-items: center;
+  box-shadow: 0 0 18px rgba(60, 160, 255, 0.12);
+}
+
+.palette-chevron {
+  width: 6px;
+  height: 6px;
+  border-right: 1.5px solid rgba(180, 230, 255, 0.85);
+  border-bottom: 1.5px solid rgba(180, 230, 255, 0.85);
+  transform: rotate(-45deg);
+  transition: transform 0.25s ease;
+}
+
+#palette-root.collapsed .palette-chevron {
+  transform: rotate(135deg);
+}
+
+#palette-rail {
+  pointer-events: auto;
+  width: 64px;
+  padding: 14px 10px 16px;
+  margin-left: 0;
+  border-radius: 0 16px 16px 0;
+  background:
+    linear-gradient(165deg, rgba(18, 24, 36, 0.82), rgba(8, 10, 16, 0.9));
+  border: 1px solid rgba(120, 200, 255, 0.18);
+  border-left: none;
+  backdrop-filter: blur(14px);
+  box-shadow:
+    0 0 0 1px rgba(255,255,255,0.03) inset,
+    0 12px 40px rgba(0,0,0,0.35),
+    0 0 28px rgba(40, 140, 255, 0.08);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  transition: width 0.28s ease, opacity 0.22s ease, padding 0.28s ease;
+  overflow: hidden;
+}
+
+#palette-root.collapsed #palette-rail {
+  width: 0;
+  padding-left: 0;
+  padding-right: 0;
+  opacity: 0;
+  border-color: transparent;
+  pointer-events: none;
+}
+
+.palette-head {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  font-size: 9px;
+  letter-spacing: 0.22em;
+  font-weight: 650;
+  color: rgba(200, 230, 255, 0.72);
+  writing-mode: horizontal-tb;
+}
+
+.palette-mark {
+  width: 18px;
+  height: 2px;
+  border-radius: 2px;
+  background: linear-gradient(90deg, transparent, #6ecbff, transparent);
+  box-shadow: 0 0 10px rgba(110, 200, 255, 0.6);
+}
+
+.palette-wells {
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+  align-items: center;
+}
+
+.palette-well {
+  position: relative;
+  width: 28px;
+  height: 28px;
+  border: none;
+  padding: 0;
+  background: transparent;
+  cursor: pointer;
+  border-radius: 999px;
+}
+
+.palette-well-core {
+  display: block;
+  width: 100%;
+  height: 100%;
+  border-radius: 999px;
+  background: var(--well);
+  box-shadow:
+    0 0 0 1px rgba(255,255,255,0.14) inset,
+    0 0 12px color-mix(in srgb, var(--well) 45%, transparent);
+  transition: transform 0.15s ease, box-shadow 0.2s ease;
+}
+
+.palette-well-id {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  font-size: 9px;
+  font-weight: 700;
+  color: rgba(255,255,255,0.88);
+  text-shadow: 0 1px 2px rgba(0,0,0,0.65);
+  pointer-events: none;
+  mix-blend-mode: soft-light;
+}
+
+.palette-well.on .palette-well-core {
+  transform: scale(1.08);
+  box-shadow:
+    0 0 0 1.5px rgba(220, 245, 255, 0.95),
+    0 0 0 3px rgba(80, 180, 255, 0.25),
+    0 0 16px color-mix(in srgb, var(--well) 55%, transparent);
+}
+
+.palette-well:hover .palette-well-core {
+  transform: scale(1.06);
+}
+
+.palette-active {
+  width: 22px;
+  height: 4px;
+  border-radius: 4px;
+  margin-top: 4px;
+  background: var(--active, #3db8ff);
+  box-shadow: 0 0 12px color-mix(in srgb, var(--active, #3db8ff) 70%, transparent);
+}
