@@ -1,6 +1,9 @@
 import './style.css';
+import { FieldSettings } from './field/FieldSettings';
+import { TipSmoother } from './field/TipSmoother';
 import { FingerFieldRenderer } from './shaders/FingerFieldRenderer';
-import { HandTracker } from './tracking/HandTracker';
+import { HandTracker, type TrackedTip } from './tracking/HandTracker';
+import { SettingsPanel } from './ui/SettingsPanel';
 
 const canvas = document.getElementById('gl') as HTMLCanvasElement;
 const video = document.getElementById('webcam') as HTMLVideoElement;
@@ -15,8 +18,10 @@ function setStatus(msg: string): void {
   status.textContent = msg;
 }
 
+const settings = new FieldSettings();
+const smoother = new TipSmoother();
 const renderer = new FingerFieldRenderer(canvas);
-const tracker = new HandTracker();
+new SettingsPanel(settings);
 
 function syncOverlaySize(): void {
   const w = wrap.clientWidth;
@@ -80,6 +85,7 @@ anonBtn.addEventListener('click', () => {
   applyAnon();
 });
 
+const tracker = new HandTracker();
 let camOk = false;
 let trackOk = false;
 
@@ -95,29 +101,44 @@ async function boot(): Promise<void> {
   }
   camOk = await camP;
   if (camOk && trackOk) {
-    setStatus('FingerPaint WEBGL — extend fingertips to drive the field.');
+    setStatus('FingerPaint WEBGL — hold tips to bloom the field (⚙ for feel).');
   }
 }
 
 boot();
 
-function frame(): void {
-  let tips: { x: number; y: number; energy: number }[] = [];
+let lastT = performance.now();
+
+function frame(now: number): void {
+  const dt = (now - lastT) / 1000;
+  lastT = now;
+  const s = settings.get();
+
+  let live: TrackedTip[] = [];
   if (camOk && trackOk && video.readyState >= 2) {
-    const tracked = tracker.detect(video);
-    tips = tracked.map((t) => ({ x: t.x, y: t.y, energy: t.energy }));
-    drawOverlay(tips);
-    if (tips.length) {
-      setStatus(`Driving ${tips.length} tip field${tips.length === 1 ? '' : 's'}`);
-    }
+    live = tracker.detect(video);
+    drawOverlay(live);
   } else {
     drawOverlay([]);
   }
 
-  // Shader UV y=0 is bottom in gl_FragCoord; MediaPipe y=0 is top.
-  // Flip Y for uniforms so tips line up with the fullscreen field.
+  const smooth = smoother.update(live, dt, s);
+
+  if (smooth.length) {
+    const peak = Math.max(...smooth.map((t) => t.energy));
+    setStatus(
+      `Bloom ${smooth.length} field${smooth.length === 1 ? '' : 's'} · peak ${(peak * 100) | 0}%`,
+    );
+  }
+
+  // Shader UV y=0 is bottom; MediaPipe y=0 is top. Flip Y for GL.
+  // Apply intensity gain so the fragment sees a quieter field.
   renderer.render(
-    tips.map((t) => ({ x: t.x, y: 1 - t.y, energy: t.energy })),
+    smooth.map((t) => ({
+      x: t.x,
+      y: 1 - t.y,
+      energy: t.energy * s.intensity,
+    })),
   );
   requestAnimationFrame(frame);
 }

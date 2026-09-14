@@ -116,19 +116,8 @@ export class HandTracker {
       }
     }
 
-    const byHand = new Map<number, TrackedTip[]>();
-    for (const t of tips) {
-      const arr = byHand.get(t.handIndex) ?? [];
-      arr.push(t);
-      byHand.set(t.handIndex, arr);
-    }
-    const filtered: TrackedTip[] = [];
-    for (const arr of byHand.values()) {
-      const minY = Math.min(...arr.map((t) => t.y));
-      filtered.push(...arr.filter((t) => t.y <= minY + 0.05));
-    }
-
-    this.lastTips = filtered.slice(0, 10);
+    // All extended tips drive the field (no upper-band ignore).
+    this.lastTips = tips.slice(0, 10);
     return this.lastTips;
   }
 }

@@ -89,3 +89,70 @@ html, body, #app {
   line-height: 1.35;
   backdrop-filter: blur(6px);
 }
+
+#settings-root {
+  position: absolute;
+  top: 14px;
+  right: 14px;
+  z-index: 20;
+  pointer-events: none;
+}
+
+#settings-gear {
+  pointer-events: auto;
+  width: 36px;
+  height: 36px;
+  border: none;
+  border-radius: 10px;
+  background: rgba(0,0,0,0.55);
+  color: #eee;
+  font-size: 18px;
+  cursor: pointer;
+  backdrop-filter: blur(6px);
+}
+
+#settings-panel {
+  pointer-events: auto;
+  margin-top: 8px;
+  width: min(280px, 86vw);
+  padding: 12px 14px 14px;
+  border-radius: 12px;
+  background: rgba(10,10,14,0.82);
+  border: 1px solid rgba(255,255,255,0.14);
+  backdrop-filter: blur(10px);
+}
+
+.settings-title {
+  font-size: 12px;
+  font-weight: 650;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  opacity: 0.75;
+  margin-bottom: 10px;
+}
+
+.settings-row {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 4px;
+  margin-bottom: 10px;
+}
+
+.settings-row label {
+  font-size: 12px;
+  opacity: 0.9;
+}
+
+.settings-row input[type="range"] {
+  width: 100%;
+}
+
+.settings-row input[type="number"] {
+  width: 100%;
+  padding: 4px 8px;
+  border-radius: 6px;
+  border: 1px solid rgba(255,255,255,0.18);
+  background: rgba(0,0,0,0.35);
+  color: #f0f0f0;
+  font-size: 13px;
+}
