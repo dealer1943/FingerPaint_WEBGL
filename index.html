@@ -1,0 +1,22 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>FingerPaint WEBGL</title>
+  </head>
+  <body>
+    <div id="app">
+      <canvas id="gl"></canvas>
+      <div id="webcam-wrap">
+        <video id="webcam" playsinline muted></video>
+        <canvas id="webcam-overlay"></canvas>
+        <button id="anon-btn" type="button" title="Hide selfie, keep tip circles">Anon</button>
+      </div>
+      <div id="hud">
+        <div id="status"></div>
+      </div>
+    </div>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>
