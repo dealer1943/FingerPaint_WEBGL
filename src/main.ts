@@ -26,18 +26,10 @@ const renderer = new FingerFieldRenderer(canvas);
 new SettingsPanel(settings);
 const fieldModules = new FieldModules();
 const palette = new PalettePanel(fieldModules);
-palette.onChange((s) => {
-  renderer.setModules({
-    pot: s.pot.enabled,
-    rip: s.rip.enabled,
-    warp: s.warp.enabled,
-    flow: s.flow.enabled,
-    grade: s.grade.enabled,
-    core: s.core.enabled,
-    vig: s.vig.enabled,
-    idle: s.idle.enabled,
-  });
+palette.onChange(() => {
+  renderer.setModes(fieldModules.modes());
 });
+renderer.setModes(fieldModules.modes());
 
 function syncOverlaySize(): void {
   const w = wrap.clientWidth;

@@ -327,3 +327,70 @@ html, body, #app {
   border-color: rgba(230, 235, 245, 0.7);
   background: rgba(255,255,255,0.08);
 }
+
+
+.palette-families {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  align-items: flex-start;
+  width: 100%;
+}
+
+.palette-row {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 6px;
+  min-height: 28px;
+}
+
+.palette-row.disabled .palette-mod-id {
+  opacity: 0.45;
+}
+
+.palette-samples {
+  display: flex;
+  flex-direction: row;
+  gap: 4px;
+  padding-left: 2px;
+}
+
+.palette-sample {
+  width: 22px;
+  height: 22px;
+  border-radius: 6px;
+  border: 1px solid rgba(200, 210, 230, 0.28);
+  background: rgba(255,255,255,0.04);
+  color: rgba(220, 230, 245, 0.9);
+  font-size: 10px;
+  font-weight: 700;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  cursor: pointer;
+  line-height: 1;
+  padding: 0;
+}
+
+.palette-sample.on {
+  border-color: rgba(230, 235, 245, 0.75);
+  background: rgba(200, 215, 240, 0.18);
+  box-shadow: 0 0 10px rgba(180, 200, 230, 0.2);
+}
+
+.palette-sample:hover {
+  border-color: rgba(230, 235, 245, 0.7);
+}
+
+.palette-variant-chip {
+  font-size: 9px;
+  font-weight: 700;
+  color: rgba(180, 195, 220, 0.55);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  min-width: 10px;
+}
+
+#palette-rail {
+  width: auto;
+  max-width: min(420px, 70vw);
+  align-items: flex-start;
+}

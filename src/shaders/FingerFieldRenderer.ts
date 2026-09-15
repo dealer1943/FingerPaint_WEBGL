@@ -1,16 +1,14 @@
 import vertSrc from './fullscreen.vert.glsl?raw';
 import fragSrc from './fingerField.frag.glsl?raw';
-import type { ModuleId } from '../field/FieldModules';
+import type { FamilyId } from '../field/ModuleCatalog';
 
 export interface TipUniform {
-  /** Normalized 0..1, mirrored X (same space as webcam overlay). */
   x: number;
   y: number;
-  /** 0..1 — how extended / energetic the tip feels. */
   energy: number;
 }
 
-export type ModuleEnables = Record<ModuleId, boolean>;
+export type FamilyModes = Record<FamilyId, number>;
 
 function compile(gl: WebGLRenderingContext, type: number, src: string): WebGLShader {
   const sh = gl.createShader(type);
@@ -25,20 +23,17 @@ function compile(gl: WebGLRenderingContext, type: number, src: string): WebGLSha
   return sh;
 }
 
-const MOD_UNIFORMS: { id: ModuleId; name: string }[] = [
-  { id: 'pot', name: 'uModPot' },
-  { id: 'rip', name: 'uModRip' },
-  { id: 'warp', name: 'uModWarp' },
-  { id: 'flow', name: 'uModFlow' },
-  { id: 'grade', name: 'uModGrade' },
-  { id: 'core', name: 'uModCore' },
-  { id: 'vig', name: 'uModVig' },
-  { id: 'idle', name: 'uModIdle' },
+const MODE_UNIFORMS: { id: FamilyId; name: string }[] = [
+  { id: 'dst', name: 'uDst' },
+  { id: 'wav', name: 'uWav' },
+  { id: 'wrp', name: 'uWrp' },
+  { id: 'nze', name: 'uNze' },
+  { id: 'grd', name: 'uGrd' },
+  { id: 'lit', name: 'uLit' },
+  { id: 'vig', name: 'uVig' },
+  { id: 'idl', name: 'uIdl' },
 ];
 
-/**
- * Fullscreen WebGL field. Fingertips + module enables drive the math.
- */
 export class FingerFieldRenderer {
   readonly canvas: HTMLCanvasElement;
   private gl: WebGLRenderingContext;
@@ -49,16 +44,9 @@ export class FingerFieldRenderer {
   private uTipCount: WebGLUniformLocation;
   private uTips: WebGLUniformLocation[] = [];
   private uTipEnergy: WebGLUniformLocation[] = [];
-  private uMods = new Map<ModuleId, WebGLUniformLocation>();
-  private enables: ModuleEnables = {
-    pot: true,
-    rip: true,
-    warp: true,
-    flow: true,
-    grade: true,
-    core: true,
-    vig: true,
-    idle: true,
+  private uModes = new Map<FamilyId, WebGLUniformLocation>();
+  private modes: FamilyModes = {
+    dst: 1, wav: 1, wrp: 1, nze: 1, grd: 1, lit: 1, vig: 1, idl: 1,
   };
   private start = performance.now();
 
@@ -102,10 +90,10 @@ export class FingerFieldRenderer {
     this.uTime = ut;
     this.uTipCount = uc;
 
-    for (const m of MOD_UNIFORMS) {
+    for (const m of MODE_UNIFORMS) {
       const u = gl.getUniformLocation(prog, m.name);
       if (!u) throw new Error(`missing ${m.name}`);
-      this.uMods.set(m.id, u);
+      this.uModes.set(m.id, u);
     }
 
     for (let i = 0; i < 10; i++) {
@@ -119,8 +107,18 @@ export class FingerFieldRenderer {
     this.resize();
   }
 
-  setModules(enables: ModuleEnables): void {
-    this.enables = { ...enables };
+  setModes(modes: FamilyModes): void {
+    this.modes = { ...modes };
+  }
+
+  /** @deprecated use setModes */
+  setModules(enables: Record<string, boolean>): void {
+    const next = { ...this.modes };
+    (Object.keys(enables) as string[]).forEach((k) => {
+      const id = k as FamilyId;
+      if (id in next) next[id] = enables[k] ? Math.max(1, next[id] || 1) : 0;
+    });
+    this.modes = next;
   }
 
   resize(): void {
@@ -148,9 +146,9 @@ export class FingerFieldRenderer {
     gl.uniform2f(this.uResolution, this.canvas.width, this.canvas.height);
     gl.uniform1f(this.uTime, (performance.now() - this.start) / 1000);
 
-    for (const m of MOD_UNIFORMS) {
-      const loc = this.uMods.get(m.id);
-      if (loc) gl.uniform1f(loc, this.enables[m.id] ? 1 : 0);
+    for (const m of MODE_UNIFORMS) {
+      const loc = this.uModes.get(m.id);
+      if (loc) gl.uniform1f(loc, this.modes[m.id] ?? 0);
     }
 
     const n = Math.min(10, tips.length);

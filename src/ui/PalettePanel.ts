@@ -1,23 +1,25 @@
 import {
   FieldModules,
-  FIELD_MODULE_DEFS,
-  type ModuleId,
+  FAMILY_DEFS,
+  type FamilyId,
   type ModulesState,
 } from '../field/FieldModules';
+import { familyById } from '../field/ModuleCatalog';
 
 const LS_OPEN = 'fpw.paletteOpen';
 
 type ChangeFn = (state: ModulesState) => void;
 
 /**
- * Left rail: programmable field modules (no color swatches).
- * Click = toggle. ⎌ = reset all to factory defaults (same look as original all-on field).
+ * Left rail: function families. Click a family to slide out numbered
+ * IqEzles samples: [A][B][1][2][3][C]. Pick B2 + C5 to compose.
  */
 export class PalettePanel {
   private root: HTMLElement;
   private rail: HTMLElement;
   private open: boolean;
   private modules: FieldModules;
+  private expanded: FamilyId | null = null;
   private listeners = new Set<ChangeFn>();
 
   constructor(modules?: FieldModules) {
@@ -32,7 +34,6 @@ export class PalettePanel {
     toggle.type = 'button';
     toggle.id = 'palette-toggle';
     toggle.title = 'Modules';
-    toggle.setAttribute('aria-label', 'Toggle modules');
     toggle.innerHTML = '<span class="palette-chevron"></span>';
     toggle.addEventListener('click', () => this.setOpen(!this.open));
 
@@ -44,29 +45,20 @@ export class PalettePanel {
     head.innerHTML = '<span class="palette-mark"></span><span>MOD</span>';
     this.rail.appendChild(head);
 
-    const wells = document.createElement('div');
-    wells.className = 'palette-wells';
-    for (const d of FIELD_MODULE_DEFS) {
-      const btn = document.createElement('button');
-      btn.type = 'button';
-      btn.className = 'palette-mod';
-      btn.dataset.id = d.id;
-      btn.title = `${d.title} — ${d.blurb}\n(click toggle; defaults restore full look)`;
-      btn.setAttribute('aria-label', d.title);
-      btn.innerHTML = `<span class="palette-mod-ring"></span><span class="palette-mod-id">${d.label}</span>`;
-      btn.addEventListener('click', () => {
-        this.modules.toggle(d.id as ModuleId);
-      });
-      wells.appendChild(btn);
-    }
-    this.rail.appendChild(wells);
+    const list = document.createElement('div');
+    list.className = 'palette-families';
+    list.id = 'palette-families';
+    this.rail.appendChild(list);
 
     const reset = document.createElement('button');
     reset.type = 'button';
     reset.className = 'palette-reset';
-    reset.title = 'Reset all modules to factory defaults';
+    reset.title = 'Reset families to factory samples (all on, variant 1)';
     reset.textContent = '↺';
-    reset.addEventListener('click', () => this.modules.resetToDefaults());
+    reset.addEventListener('click', () => {
+      this.expanded = null;
+      this.modules.resetToDefaults();
+    });
     this.rail.appendChild(reset);
 
     this.root.appendChild(toggle);
@@ -74,7 +66,7 @@ export class PalettePanel {
     document.body.appendChild(this.root);
 
     this.modules.onChange((s) => {
-      this.sync(s);
+      this.renderList(s);
       for (const fn of this.listeners) fn(s);
     });
   }
@@ -95,12 +87,63 @@ export class PalettePanel {
     this.root.classList.toggle('collapsed', !open);
   }
 
-  private sync(s: ModulesState): void {
-    this.rail.querySelectorAll('.palette-mod').forEach((el) => {
-      const btn = el as HTMLButtonElement;
-      const id = btn.dataset.id as ModuleId;
-      btn.classList.toggle('on', !!s[id]?.enabled);
-      btn.classList.toggle('off', !s[id]?.enabled);
-    });
+  private renderList(s: ModulesState): void {
+    const list = this.rail.querySelector('#palette-families') as HTMLElement;
+    list.innerHTML = '';
+
+    for (const def of FAMILY_DEFS) {
+      const row = document.createElement('div');
+      row.className = 'palette-row';
+      row.dataset.family = def.id;
+      if (this.expanded === def.id) row.classList.add('expanded');
+      if (!s[def.id].enabled) row.classList.add('disabled');
+
+      const fam = document.createElement('button');
+      fam.type = 'button';
+      fam.className = 'palette-mod';
+      fam.classList.toggle('on', s[def.id].enabled);
+      fam.classList.toggle('off', !s[def.id].enabled);
+      fam.title = `${def.title} — ${def.blurb}\nClick: expand samples · Alt-click: enable/disable`;
+      fam.innerHTML = `<span class="palette-mod-ring"></span><span class="palette-mod-id">${def.label}</span>`;
+      fam.addEventListener('click', (ev) => {
+        if (ev.altKey) {
+          this.modules.toggleEnabled(def.id);
+          return;
+        }
+        this.expanded = this.expanded === def.id ? null : def.id;
+        this.renderList(this.modules.get());
+      });
+      row.appendChild(fam);
+
+      if (this.expanded === def.id) {
+        const samples = document.createElement('div');
+        samples.className = 'palette-samples';
+        for (const v of def.variants) {
+          const b = document.createElement('button');
+          b.type = 'button';
+          b.className = 'palette-sample';
+          b.textContent = String(v.n);
+          b.title = `${def.label}[${v.n}] ${v.name}\n${v.method}\n\n${v.source}`;
+          const active =
+            s[def.id].enabled && s[def.id].variant === v.n;
+          b.classList.toggle('on', active);
+          b.addEventListener('click', () => {
+            this.modules.setVariant(def.id, v.n);
+          });
+          samples.appendChild(b);
+        }
+        row.appendChild(samples);
+      } else if (s[def.id].enabled) {
+        const chip = document.createElement('span');
+        chip.className = 'palette-variant-chip';
+        chip.textContent = String(s[def.id].variant);
+        chip.title = familyById(def.id).variants.find(
+          (v) => v.n === s[def.id].variant,
+        )?.name ?? '';
+        row.appendChild(chip);
+      }
+
+      list.appendChild(row);
+    }
   }
 }
