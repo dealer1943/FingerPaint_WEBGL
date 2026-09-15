@@ -47,12 +47,15 @@ function extensionEnergy(
 }
 
 /**
- * MediaPipe Hands → extended fingertips (mirrored), up to 2 hands.
+ * MediaPipe Hands → one tip at a time: lowest Y (highest on screen)
+ * among extended fingertips. Still tagged with which finger it is.
  */
 export class HandTracker {
   private landmarker: HandLandmarker | null = null;
   private lastVideoTime = -1;
   private lastTips: TrackedTip[] = [];
+  /** How many tips to emit (default 1). */
+  maxTips = 1;
 
   async init(): Promise<void> {
     const vision = await FilesetResolver.forVisionTasks(
@@ -65,7 +68,8 @@ export class HandTracker {
         delegate: 'GPU',
       },
       runningMode: 'VIDEO',
-      numHands: 2,
+      // One hand is enough for single-tip drive and lighter on the browser.
+      numHands: 1,
       minHandDetectionConfidence: 0.55,
       minHandPresenceConfidence: 0.55,
       minTrackingConfidence: 0.5,
@@ -116,8 +120,10 @@ export class HandTracker {
       }
     }
 
-    // All extended tips drive the field (no upper-band ignore).
-    this.lastTips = tips.slice(0, 10);
+    // Lowest Y = highest on screen. Keep finger id on the winner.
+    tips.sort((a, b) => a.y - b.y || a.x - b.x);
+    const n = Math.max(1, Math.min(10, Math.floor(this.maxTips) || 1));
+    this.lastTips = tips.slice(0, n);
     return this.lastTips;
   }
 }

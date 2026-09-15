@@ -28,7 +28,7 @@ const DROP = 0.008;
 export class TipSmoother {
   private slots = new Map<string, Slot>();
 
-  update(tips: TrackedTip[], dt: number, settings: FieldSettingsState): SmoothTip[] {
+  update(tips: TrackedTip[], dt: number, settings: FieldSettingsState, maxOut = 2): SmoothTip[] {
     const dtClamped = Math.min(0.1, Math.max(0, dt));
     const attack = Math.max(0.05, settings.attackSeconds);
     const decay = Math.max(0.05, settings.decaySeconds);
@@ -84,6 +84,7 @@ export class TipSmoother {
       });
     }
     out.sort((a, b) => b.energy - a.energy);
-    return out.slice(0, 10);
+    const cap = Math.max(1, Math.min(10, Math.floor(maxOut) || 2));
+    return out.slice(0, cap);
   }
 }

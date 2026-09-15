@@ -7,6 +7,8 @@ export interface FieldSettingsState {
   intensity: number;
   /** Position follow time-constant while tip is live (seconds). */
   positionSmoothSeconds: number;
+  /** How many tips drive the field (1 = highest on screen only). */
+  maxTips: number;
 }
 
 export const FIELD_SETTINGS_DEFAULTS: FieldSettingsState = {
@@ -14,6 +16,7 @@ export const FIELD_SETTINGS_DEFAULTS: FieldSettingsState = {
   decaySeconds: 30,
   intensity: 0.4,
   positionSmoothSeconds: 0.55,
+  maxTips: 1,
 };
 
 export const FIELD_SETTINGS_RANGES: Record<
@@ -29,6 +32,7 @@ export const FIELD_SETTINGS_RANGES: Record<
     step: 0.05,
     label: 'Position smooth (s)',
   },
+  maxTips: { min: 1, max: 5, step: 1, label: 'Max tips' },
 };
 
 const LS_KEY = 'fpw.settings';
@@ -54,6 +58,7 @@ function load(): FieldSettingsState {
         'positionSmoothSeconds',
         parsed.positionSmoothSeconds ?? FIELD_SETTINGS_DEFAULTS.positionSmoothSeconds,
       ),
+      maxTips: clamp('maxTips', parsed.maxTips ?? FIELD_SETTINGS_DEFAULTS.maxTips),
     };
   } catch {
     return { ...FIELD_SETTINGS_DEFAULTS };

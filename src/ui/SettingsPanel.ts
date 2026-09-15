@@ -11,6 +11,7 @@ const KEYS: Key[] = [
   'decaySeconds',
   'intensity',
   'positionSmoothSeconds',
+  'maxTips',
 ];
 
 export class SettingsPanel {

@@ -129,6 +129,7 @@ function frame(now: number): void {
   const dt = (now - lastT) / 1000;
   lastT = now;
   const s = settings.get();
+  tracker.maxTips = s.maxTips;
 
   let live: TrackedTip[] = [];
   if (camOk && trackOk && video.readyState >= 2) {
@@ -138,7 +139,7 @@ function frame(now: number): void {
     drawOverlay([]);
   }
 
-  const smooth = smoother.update(live, dt, s);
+  const smooth = smoother.update(live, dt, s, Math.max(2, s.maxTips));
 
   if (smooth.length) {
     const peak = Math.max(...smooth.map((t) => t.energy));
