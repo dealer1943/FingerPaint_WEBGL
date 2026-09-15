@@ -1,25 +1,27 @@
 import {
   FieldModules,
-  FAMILY_DEFS,
-  type FamilyId,
-  type ModulesState,
+  PORTAL_DEFS,
+  type PortalId,
+  type PortalState,
+  type ExploreLayer,
+  type MazeTheme,
+  type WaterTheme,
 } from '../field/FieldModules';
-import { familyById } from '../field/ModuleCatalog';
 
 const LS_OPEN = 'fpw.paletteOpen';
 
-type ChangeFn = (state: ModulesState) => void;
+type ChangeFn = (state: PortalState) => void;
 
 /**
- * Left rail: function families. Click a family to slide out numbered
- * IqEzles samples: [A][B][1][2][3][C]. Pick B2 + C5 to compose.
+ * Left rail: three portals. Expand for biome chips.
+ * Explore layers multi-select (day XOR night). Maze/Water pick one.
  */
 export class PalettePanel {
   private root: HTMLElement;
   private rail: HTMLElement;
   private open: boolean;
   private modules: FieldModules;
-  private expanded: FamilyId | null = null;
+  private expanded: PortalId | null = 'explore';
   private listeners = new Set<ChangeFn>();
 
   constructor(modules?: FieldModules) {
@@ -33,7 +35,7 @@ export class PalettePanel {
     const toggle = document.createElement('button');
     toggle.type = 'button';
     toggle.id = 'palette-toggle';
-    toggle.title = 'Modules';
+    toggle.title = 'Portals';
     toggle.innerHTML = '<span class="palette-chevron"></span>';
     toggle.addEventListener('click', () => this.setOpen(!this.open));
 
@@ -42,7 +44,7 @@ export class PalettePanel {
 
     const head = document.createElement('div');
     head.className = 'palette-head';
-    head.innerHTML = '<span class="palette-mark"></span><span>MOD</span>';
+    head.innerHTML = '<span class="palette-mark"></span><span>PORTAL</span>';
     this.rail.appendChild(head);
 
     const list = document.createElement('div');
@@ -53,10 +55,10 @@ export class PalettePanel {
     const reset = document.createElement('button');
     reset.type = 'button';
     reset.className = 'palette-reset';
-    reset.title = 'Reset families to factory samples (all on, variant 1)';
+    reset.title = 'Reset portals';
     reset.textContent = '↺';
     reset.addEventListener('click', () => {
-      this.expanded = null;
+      this.expanded = 'explore';
       this.modules.resetToDefaults();
     });
     this.rail.appendChild(reset);
@@ -87,30 +89,25 @@ export class PalettePanel {
     this.root.classList.toggle('collapsed', !open);
   }
 
-  private renderList(s: ModulesState): void {
+  private renderList(s: PortalState): void {
     const list = this.rail.querySelector('#palette-families') as HTMLElement;
     list.innerHTML = '';
 
-    for (const def of FAMILY_DEFS) {
+    for (const def of PORTAL_DEFS) {
       const row = document.createElement('div');
       row.className = 'palette-row';
-      row.dataset.family = def.id;
       if (this.expanded === def.id) row.classList.add('expanded');
-      if (!s[def.id].enabled) row.classList.add('disabled');
+      if (s.active === def.id) row.classList.add('active-portal');
 
       const fam = document.createElement('button');
       fam.type = 'button';
       fam.className = 'palette-mod';
-      fam.classList.toggle('on', s[def.id].enabled);
-      fam.classList.toggle('off', !s[def.id].enabled);
-      fam.title = `${def.title} — ${def.blurb}\nClick: expand samples · Alt-click: enable/disable`;
+      fam.classList.toggle('on', s.active === def.id);
+      fam.title = `${def.title} — ${def.blurb}`;
       fam.innerHTML = `<span class="palette-mod-ring"></span><span class="palette-mod-id">${def.label}</span>`;
-      fam.addEventListener('click', (ev) => {
-        if (ev.altKey) {
-          this.modules.toggleEnabled(def.id);
-          return;
-        }
-        this.expanded = this.expanded === def.id ? null : def.id;
+      fam.addEventListener('click', () => {
+        this.modules.setActive(def.id);
+        this.expanded = this.expanded === def.id ? this.expanded : def.id;
         this.renderList(this.modules.get());
       });
       row.appendChild(fam);
@@ -118,29 +115,33 @@ export class PalettePanel {
       if (this.expanded === def.id) {
         const samples = document.createElement('div');
         samples.className = 'palette-samples';
-        for (const v of def.variants) {
+        for (const layer of def.layers) {
           const b = document.createElement('button');
           b.type = 'button';
           b.className = 'palette-sample';
-          b.textContent = String(v.n);
-          b.title = `${def.label}[${v.n}] ${v.name}\n${v.method}\n\n${v.source}`;
-          const active =
-            s[def.id].enabled && s[def.id].variant === v.n;
-          b.classList.toggle('on', active);
-          b.addEventListener('click', () => {
-            this.modules.setVariant(def.id, v.n);
-          });
+          b.textContent = layer.label;
+          b.title = `${layer.title}\n${layer.method}`;
+          let on = false;
+          if (def.id === 'explore') {
+            on = !!s.explore[layer.id as ExploreLayer];
+            b.addEventListener('click', () => {
+              this.modules.toggleExplore(layer.id as ExploreLayer);
+            });
+          } else if (def.id === 'maze') {
+            on = s.maze === layer.id;
+            b.addEventListener('click', () => {
+              this.modules.setMaze(layer.id as MazeTheme);
+            });
+          } else {
+            on = s.water === layer.id;
+            b.addEventListener('click', () => {
+              this.modules.setWater(layer.id as WaterTheme);
+            });
+          }
+          b.classList.toggle('on', on);
           samples.appendChild(b);
         }
         row.appendChild(samples);
-      } else if (s[def.id].enabled) {
-        const chip = document.createElement('span');
-        chip.className = 'palette-variant-chip';
-        chip.textContent = String(s[def.id].variant);
-        chip.title = familyById(def.id).variants.find(
-          (v) => v.n === s[def.id].variant,
-        )?.name ?? '';
-        row.appendChild(chip);
       }
 
       list.appendChild(row);

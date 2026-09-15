@@ -6,7 +6,8 @@ import { HandTracker, type TrackedTip } from './tracking/HandTracker';
 import { SettingsPanel } from './ui/SettingsPanel';
 import { FieldModules } from './field/FieldModules';
 import { PalettePanel } from './ui/PalettePanel';
-import { ColorStrip } from './ui/ColorStrip';
+import { WorldCamera } from './world/WorldCamera';
+import { exploreFree, mazeFree, waterFree } from './world/collide';
 
 const canvas = document.getElementById('gl') as HTMLCanvasElement;
 const video = document.getElementById('webcam') as HTMLVideoElement;
@@ -34,12 +35,15 @@ try {
 new SettingsPanel(settings);
 const fieldModules = new FieldModules();
 const palette = new PalettePanel(fieldModules);
-palette.onChange(() => {
-  renderer.setModes(fieldModules.modes());
-});
-renderer.setModes(fieldModules.modes());
-const colors = new ColorStrip();
-colors.onChange(([r, g, b]) => renderer.setTint(r, g, b));
+const worldCam = new WorldCamera();
+
+function applyPortal(): void {
+  const s = fieldModules.get();
+  worldCam.setMode(s.active);
+  renderer.setPortal(fieldModules.uniforms());
+}
+palette.onChange(() => applyPortal());
+applyPortal();
 
 function syncOverlaySize(): void {
   const w = wrap.clientWidth;
@@ -50,9 +54,7 @@ function syncOverlaySize(): void {
   }
 }
 
-function drawOverlay(
-  tips: { x: number; y: number; energy: number }[],
-): void {
+function drawOverlay(tips: { x: number; y: number; energy: number }[]): void {
   syncOverlaySize();
   const ctx = overlay.getContext('2d');
   if (!ctx) return;
@@ -66,10 +68,6 @@ function drawOverlay(
     ctx.strokeStyle = `rgba(255, 220, 120, ${0.45 + t.energy * 0.5})`;
     ctx.lineWidth = 2;
     ctx.stroke();
-    ctx.beginPath();
-    ctx.arc(px, py, 2.5, 0, Math.PI * 2);
-    ctx.fillStyle = 'rgba(255,255,255,0.9)';
-    ctx.fill();
   }
 }
 
@@ -85,7 +83,7 @@ async function startCam(): Promise<boolean> {
     return true;
   } catch (e) {
     console.error(e);
-    setStatus('Camera denied or unavailable. Allow webcam and reload.');
+    setStatus('Camera denied — tip still drives the portal if you allow it.');
     return false;
   }
 }
@@ -108,27 +106,49 @@ let camOk = false;
 let trackOk = false;
 
 async function boot(): Promise<void> {
-  setStatus('Loading MediaPipe Hands…');
+  setStatus('Opening portal…');
   const camP = startCam();
   try {
     await tracker.init();
     trackOk = true;
   } catch (e) {
     console.error(e);
-    setStatus('Failed to load hand model (needs network once for CDN).');
+    setStatus('Hand model failed (needs network once).');
   }
   camOk = await camP;
   if (camOk && trackOk) {
-    setStatus('FingerPaint WEBGL — hold tips to bloom the field (⚙ for feel).');
+    setStatus('Portal open — point a finger to look / move. WILD · MAZE · SEA');
   }
 }
 
 boot();
 
+function camBasis() {
+  const p = worldCam.pose;
+  const cp = Math.cos(p.pitch);
+  const sp = Math.sin(p.pitch);
+  const cy = Math.cos(p.yaw);
+  const sy = Math.sin(p.yaw);
+  const fwd: [number, number, number] = [sy * cp, -sp, cy * cp];
+  const right: [number, number, number] = [cy, 0, -sy];
+  const up: [number, number, number] = [
+    right[1] * fwd[2] - right[2] * fwd[1],
+    right[2] * fwd[0] - right[0] * fwd[2],
+    right[0] * fwd[1] - right[1] * fwd[0],
+  ];
+  const ul = Math.hypot(up[0], up[1], up[2]) || 1;
+  return {
+    pos: [p.x, p.y, p.z] as [number, number, number],
+    fwd,
+    right,
+    up: [up[0] / ul, up[1] / ul, up[2] / ul] as [number, number, number],
+  };
+}
+
 let lastT = performance.now();
 
 function frame(now: number): void {
-  const dt = (now - lastT) / 1000;
+  const dt = Math.min(0.05, (now - lastT) / 1000);
   lastT = now;
   const s = settings.get();
   tracker.maxTips = s.maxTips;
@@ -142,23 +162,21 @@ function frame(now: number): void {
   }
 
   const smooth = smoother.update(live, dt, s, Math.max(2, s.maxTips));
+  const tip = smooth[0] ?? null;
+  const portal = fieldModules.get().active;
+  const collide =
+    portal === 'maze' ? mazeFree : portal === 'water' ? waterFree : exploreFree;
+  worldCam.update(tip, dt, collide);
+  renderer.setCamera(camBasis());
+  renderer.setPortal(fieldModules.uniforms());
+  renderer.render();
 
-  if (smooth.length) {
-    const peak = Math.max(...smooth.map((t) => t.energy));
+  if (tip) {
     setStatus(
-      `Bloom ${smooth.length} field${smooth.length === 1 ? '' : 's'} · peak ${(peak * 100) | 0}%`,
+      `${portal.toUpperCase()} · tip ${(tip.energy * 100) | 0}% · move with finger`,
     );
   }
 
-  // Shader UV y=0 is bottom; MediaPipe y=0 is top. Flip Y for GL.
-  // Apply intensity gain so the fragment sees a quieter field.
-  renderer.render(
-    smooth.map((t) => ({
-      x: t.x,
-      y: 1 - t.y,
-      energy: t.energy * s.intensity,
-    })),
-  );
   requestAnimationFrame(frame);
 }
 

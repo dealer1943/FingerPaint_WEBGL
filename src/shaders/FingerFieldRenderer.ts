@@ -1,14 +1,19 @@
 import vertSrc from './fullscreen.vert.glsl?raw';
 import fragSrc from './fingerField.frag.glsl?raw';
-import type { FamilyId } from '../field/ModuleCatalog';
 
-export interface TipUniform {
-  x: number;
-  y: number;
-  energy: number;
+export interface CamUniforms {
+  pos: [number, number, number];
+  fwd: [number, number, number];
+  right: [number, number, number];
+  up: [number, number, number];
 }
 
-export type FamilyModes = Record<FamilyId, number>;
+export interface PortalUniforms {
+  portal: number;
+  explore: number[];
+  maze: number;
+  water: number;
+}
 
 function compile(gl: WebGLRenderingContext, type: number, src: string): WebGLShader {
   const sh = gl.createShader(type);
@@ -23,17 +28,6 @@ function compile(gl: WebGLRenderingContext, type: number, src: string): WebGLSha
   return sh;
 }
 
-const MODE_UNIFORMS: { id: FamilyId; name: string }[] = [
-  { id: 'march', name: 'uMarch' },
-  { id: 'sdf', name: 'uSdf' },
-  { id: 'csg', name: 'uCsg' },
-  { id: 'noise', name: 'uNoise' },
-  { id: 'light', name: 'uLight' },
-  { id: 'fog', name: 'uFog' },
-  { id: 'fract', name: 'uFract' },
-  { id: 'deform', name: 'uDeform' },
-];
-
 export class FingerFieldRenderer {
   readonly canvas: HTMLCanvasElement;
   private gl: WebGLRenderingContext;
@@ -41,22 +35,26 @@ export class FingerFieldRenderer {
   private buf: WebGLBuffer;
   private uResolution: WebGLUniformLocation;
   private uTime: WebGLUniformLocation;
-  private uTipCount: WebGLUniformLocation;
-  private uTint: WebGLUniformLocation;
-  private uTips: WebGLUniformLocation[] = [];
-  private uTipEnergy: WebGLUniformLocation[] = [];
-  private uModes = new Map<FamilyId, WebGLUniformLocation>();
-  private modes: FamilyModes = {
-    march: 1,
-    sdf: 1,
-    csg: 1,
-    noise: 0,
-    light: 1,
-    fog: 1,
-    fract: 0,
-    deform: 0,
+  private uPortal: WebGLUniformLocation;
+  private uExplore: WebGLUniformLocation;
+  private uMaze: WebGLUniformLocation;
+  private uWater: WebGLUniformLocation;
+  private uCamPos: WebGLUniformLocation;
+  private uCamFwd: WebGLUniformLocation;
+  private uCamRight: WebGLUniformLocation;
+  private uCamUp: WebGLUniformLocation;
+  private portal: PortalUniforms = {
+    portal: 1,
+    explore: [1, 1, 0, 1, 1, 0, 0],
+    maze: 1,
+    water: 1,
   };
-  private tint: [number, number, number] = [0.35, 0.55, 1.0];
+  private cam: CamUniforms = {
+    pos: [0, 1.4, 5.5],
+    fwd: [0, 0, -1],
+    right: [1, 0, 0],
+    up: [0, 1, 0],
+  };
   private start = performance.now();
 
   constructor(canvas: HTMLCanvasElement) {
@@ -91,39 +89,36 @@ export class FingerFieldRenderer {
       gl.STATIC_DRAW,
     );
 
-    const loc = gl.getUniformLocation(prog, 'uResolution');
-    const ut = gl.getUniformLocation(prog, 'uTime');
-    const uc = gl.getUniformLocation(prog, 'uTipCount');
-    const utint = gl.getUniformLocation(prog, 'uTint');
-    if (!loc || !ut || !uc || !utint) throw new Error('missing uniforms');
-    this.uResolution = loc;
-    this.uTime = ut;
-    this.uTipCount = uc;
-    this.uTint = utint;
-
-    for (const m of MODE_UNIFORMS) {
-      const u = gl.getUniformLocation(prog, m.name);
-      if (!u) throw new Error(`missing ${m.name}`);
-      this.uModes.set(m.id, u);
-    }
-
-    for (let i = 0; i < 10; i++) {
-      const tip = gl.getUniformLocation(prog, `uTips[${i}]`);
-      const en = gl.getUniformLocation(prog, `uTipEnergy[${i}]`);
-      if (!tip || !en) throw new Error(`missing tip uniform ${i}`);
-      this.uTips.push(tip);
-      this.uTipEnergy.push(en);
-    }
+    const need = (name: string) => {
+      const u = gl.getUniformLocation(prog, name);
+      if (!u) throw new Error(`missing ${name}`);
+      return u;
+    };
+    this.uResolution = need('uResolution');
+    this.uTime = need('uTime');
+    this.uPortal = need('uPortal');
+    this.uExplore = need('uExplore[0]');
+    this.uMaze = need('uMaze');
+    this.uWater = need('uWater');
+    this.uCamPos = need('uCamPos');
+    this.uCamFwd = need('uCamFwd');
+    this.uCamRight = need('uCamRight');
+    this.uCamUp = need('uCamUp');
 
     this.resize();
   }
 
-  setModes(modes: FamilyModes): void {
-    this.modes = { ...modes };
+  setPortal(u: PortalUniforms): void {
+    this.portal = {
+      portal: u.portal,
+      explore: u.explore.slice(0, 7),
+      maze: u.maze,
+      water: u.water,
+    };
   }
 
-  setTint(r: number, g: number, b: number): void {
-    this.tint = [r, g, b];
+  setCamera(c: CamUniforms): void {
+    this.cam = c;
   }
 
   resize(): void {
@@ -139,7 +134,7 @@ export class FingerFieldRenderer {
     this.gl.viewport(0, 0, this.canvas.width, this.canvas.height);
   }
 
-  render(tips: TipUniform[]): void {
+  render(): void {
     const gl = this.gl;
     this.resize();
     gl.useProgram(this.program);
@@ -150,24 +145,16 @@ export class FingerFieldRenderer {
 
     gl.uniform2f(this.uResolution, this.canvas.width, this.canvas.height);
     gl.uniform1f(this.uTime, (performance.now() - this.start) / 1000);
-    gl.uniform3f(this.uTint, this.tint[0], this.tint[1], this.tint[2]);
-
-    for (const m of MODE_UNIFORMS) {
-      const loc = this.uModes.get(m.id);
-      if (loc) gl.uniform1f(loc, this.modes[m.id] ?? 0);
-    }
-
-    const n = Math.min(10, tips.length);
-    gl.uniform1f(this.uTipCount, n);
-    for (let i = 0; i < 10; i++) {
-      if (i < n) {
-        gl.uniform2f(this.uTips[i], tips[i].x, tips[i].y);
-        gl.uniform1f(this.uTipEnergy[i], tips[i].energy);
-      } else {
-        gl.uniform2f(this.uTips[i], -1, -1);
-        gl.uniform1f(this.uTipEnergy[i], 0);
-      }
-    }
+    gl.uniform1f(this.uPortal, this.portal.portal);
+    const ex = this.portal.explore;
+    while (ex.length < 7) ex.push(0);
+    gl.uniform1fv(this.uExplore, new Float32Array(ex));
+    gl.uniform1f(this.uMaze, this.portal.maze);
+    gl.uniform1f(this.uWater, this.portal.water);
+    gl.uniform3f(this.uCamPos, this.cam.pos[0], this.cam.pos[1], this.cam.pos[2]);
+    gl.uniform3f(this.uCamFwd, this.cam.fwd[0], this.cam.fwd[1], this.cam.fwd[2]);
+    gl.uniform3f(this.uCamRight, this.cam.right[0], this.cam.right[1], this.cam.right[2]);
+    gl.uniform3f(this.uCamUp, this.cam.up[0], this.cam.up[1], this.cam.up[2]);
 
     gl.drawArrays(gl.TRIANGLES, 0, 6);
   }
