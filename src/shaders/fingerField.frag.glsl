@@ -316,7 +316,7 @@ float mapScene(vec3 p) {
   // IQ Noise — uNoise 1…5 (Ch.8). Leaves sdf/light/march/csg/fract alone.
   if (uNoise > 0.5 && uNoise < 1.5) {
     // 1 fBM displacement — p16
-    d -= 0.08 * fbm(p * 2.0 + uTime * 0.05);
+    d -= 0.08 * fbm(p.xz * 2.0 + uTime * 0.05);
   } else if (uNoise > 1.5 && uNoise < 2.5) {
     // 2 Domain warp — p19
     vec3 q = p + 0.28 * vec3(
