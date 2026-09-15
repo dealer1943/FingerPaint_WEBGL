@@ -382,27 +382,39 @@ vec3 calcNormal(vec3 p) {
 }
 
 float softShadow(vec3 ro, vec3 rd) {
+  // Quilez soft shadows (p24 / p52) — k controls penumbra width
   float res = 1.0;
   float t = 0.02;
-  for (int i = 0; i < 24; i++) {
+  float k = 18.0;
+  for (int i = 0; i < 48; i++) {
     float h = mapScene(ro + rd * t);
-    res = min(res, 16.0 * h / t);
-    t += clamp(h, 0.02, 0.2);
-    if (res < 0.05 || t > 8.0) break;
+    res = min(res, k * h / t);
+    t += clamp(h, 0.015, 0.25);
+    if (res < 0.005 || t > 10.0) break;
   }
   return clamp(res, 0.0, 1.0);
 }
 
 float calcAO(vec3 p, vec3 n) {
+  // Multires SDF AO spirit (p80–p83) — near + mid cavities
   float occ = 0.0;
   float sca = 1.0;
   for (int i = 0; i < 5; i++) {
-    float h = 0.01 + 0.12 * float(i) / 4.0;
+    float h = 0.01 + 0.15 * float(i) / 4.0;
     float d = mapScene(p + h * n);
     occ += (h - d) * sca;
-    sca *= 0.95;
+    sca *= 0.85;
   }
-  return clamp(1.0 - 1.5 * occ, 0.0, 1.0);
+  // second coarser shell
+  float occ2 = 0.0;
+  sca = 1.0;
+  for (int i = 0; i < 3; i++) {
+    float h = 0.08 + 0.35 * float(i) / 2.0;
+    float d = mapScene(p + h * n);
+    occ2 += (h - d) * sca;
+    sca *= 0.7;
+  }
+  return clamp(1.0 - 2.2 * occ - 0.55 * occ2, 0.0, 1.0);
 }
 
 vec3 paletteIQ(float t) {
@@ -451,11 +463,16 @@ vec3 shade(vec3 p, vec3 rd, float tHit) {
   vec3 skyCol = vec3(0.32, 0.42, 0.78) * mix(vec3(1.0), uTint, 0.3);
   vec3 bounceCol = vec3(0.55, 0.42, 0.28) * mix(vec3(1.0), uTint, 0.5);
 
-  // p78 outdoors three-light spirit
+  // p78 outdoors three-light spirit — key / sky / bounce, none dominates
   vec3 key = sunCol * dif * sh;
-  vec3 sky = skyCol * (0.45 + 0.55 * clamp(n.y, 0.0, 1.0));
-  vec3 ind = bounceCol * ao * (0.35 + 0.35 * clamp(-n.y, 0.0, 1.0));
+  vec3 sky = skyCol * (0.40 + 0.60 * clamp(n.y * 0.5 + 0.5, 0.0, 1.0));
+  vec3 ind = bounceCol * ao * (0.30 + 0.40 * clamp(-n.y, 0.0, 1.0));
+  vec3 h = normalize(l - rd);
+  float spe = pow(clamp(dot(n, h), 0.0, 1.0), 48.0) * sh;
   vec3 col = key + sky * ao + ind;
+  if (mode > 0.5 && mode < 1.5) {
+    col += sunCol * spe * 0.22;
+  }
 
   if (mode > 4.5 && mode < 5.5) {
     // p81 / p84 GI sketch — directional bounce toward -l hemisphere
@@ -518,10 +535,12 @@ vec3 shade(vec3 p, vec3 rd, float tHit) {
     fogAmt = smoothstep(1.1, -0.35, p.y) * 0.85;
     fogCol = mix(fogCol, vec3(0.45, 0.52, 0.62), 0.35);
   } else if (uFog > 2.5 && uFog < 3.5) {
-    // 3 sun in fog
-    float sun = pow(clamp(dot(rd, normalize(tip - vec3(0.0))), 0.0, 1.0), 18.0);
-    fogCol += sunCol * sun * 0.85;
-    fogAmt = 1.0 - exp(-0.02 * tHit * tHit);
+    // 3 sun in fog (p79) — disc + soft halo
+    vec3 sunDir = normalize(tip - vec3(0.0));
+    float sun = pow(clamp(dot(rd, sunDir), 0.0, 1.0), 18.0);
+    float halo = pow(clamp(dot(rd, sunDir), 0.0, 1.0), 4.0);
+    fogCol += sunCol * (sun * 1.1 + halo * 0.35);
+    fogAmt = 1.0 - exp(-0.024 * tHit * tHit);
   } else if (uFog > 3.5 && uFog < 4.5) {
     // 4 Beer-Lambert density
     float sigma = 0.22 + 0.15 * (1.0 - ao);
