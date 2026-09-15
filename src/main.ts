@@ -23,7 +23,14 @@ function setStatus(msg: string): void {
 
 const settings = new FieldSettings();
 const smoother = new TipSmoother();
-const renderer = new FingerFieldRenderer(canvas);
+let renderer: FingerFieldRenderer;
+try {
+  renderer = new FingerFieldRenderer(canvas);
+} catch (e) {
+  console.error(e);
+  setStatus('WebGL shader failed: ' + (e instanceof Error ? e.message : String(e)));
+  throw e;
+}
 new SettingsPanel(settings);
 const fieldModules = new FieldModules();
 const palette = new PalettePanel(fieldModules);

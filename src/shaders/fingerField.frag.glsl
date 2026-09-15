@@ -87,12 +87,12 @@ vec2 tipWarp2(vec2 p) {
   // Ch.15 Recipe B — domain warp from fingertips
   vec2 w = vec2(0.0);
   for (int i = 0; i < 10; i++) {
-    if (float(i) >= uTipCount) break;
+    float active = step(float(i) + 0.5, uTipCount);
     vec2 ti = (uTips[i] - 0.5) * 2.4;
     float ei = uTipEnergy[i];
     vec2 d = p - ti;
     float r = length(d) + 1e-3;
-    w += normalize(d) * ei * exp(-r * 2.2);
+    w += active * (d / r) * ei * exp(-r * 2.2);
   }
   return w * 0.08;
 }
@@ -184,7 +184,7 @@ float limitedRepeatPrim(vec3 p, vec3 tip, float sdfMode) {
   // p51 limited domain repetition around tip
   float s = 0.78;
   vec3 lim = vec3(2.0, 0.0, 2.0);
-  vec3 id = clamp(round((p - tip) / s), -lim, lim);
+  vec3 id = clamp(floor((p - tip) / s + 0.5), -lim, lim);
   vec3 q = (p - tip) - id * s;
   return primAt(q, sdfMode);
 }
@@ -221,7 +221,7 @@ float mandelbulbDE(vec3 pos) {
     z = zr * vec3(sin(theta) * cos(phi), sin(phi) * sin(theta), cos(theta));
     z += pos;
   }
-  return 0.5 * log(r) * r / dr;
+  return 0.5 * log(max(r, 1e-4)) * r / max(dr, 1e-4);
 }
 
 
@@ -362,10 +362,6 @@ float mapScene(vec3 p) {
     d = min(d, menger(p * 0.7) * 0.7);
   } else if (uFract > 4.5) {
     // 5 hybrid bulb + tip sphere (Ch.11)
-    d = smin(d, mandelbulbDE((p - tip) * 1.4) * 0.5, 0.2);
-  } else if (uFract > 3.5 && uFract < 4.5) {
-    d = min(d, menger(p * 0.7) * 0.7);
-  } else if (uFract > 4.5) {
     d = smin(d, mandelbulbDE((p - tip) * 1.4) * 0.5, 0.2);
   }
 
