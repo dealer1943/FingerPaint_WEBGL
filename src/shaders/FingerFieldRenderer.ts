@@ -24,14 +24,14 @@ function compile(gl: WebGLRenderingContext, type: number, src: string): WebGLSha
 }
 
 const MODE_UNIFORMS: { id: FamilyId; name: string }[] = [
-  { id: 'dst', name: 'uDst' },
-  { id: 'wav', name: 'uWav' },
-  { id: 'wrp', name: 'uWrp' },
-  { id: 'nze', name: 'uNze' },
-  { id: 'grd', name: 'uGrd' },
-  { id: 'lit', name: 'uLit' },
-  { id: 'vig', name: 'uVig' },
-  { id: 'idl', name: 'uIdl' },
+  { id: 'march', name: 'uMarch' },
+  { id: 'sdf', name: 'uSdf' },
+  { id: 'csg', name: 'uCsg' },
+  { id: 'noise', name: 'uNoise' },
+  { id: 'light', name: 'uLight' },
+  { id: 'fog', name: 'uFog' },
+  { id: 'fract', name: 'uFract' },
+  { id: 'deform', name: 'uDeform' },
 ];
 
 export class FingerFieldRenderer {
@@ -42,12 +42,21 @@ export class FingerFieldRenderer {
   private uResolution: WebGLUniformLocation;
   private uTime: WebGLUniformLocation;
   private uTipCount: WebGLUniformLocation;
+  private uTint: WebGLUniformLocation;
   private uTips: WebGLUniformLocation[] = [];
   private uTipEnergy: WebGLUniformLocation[] = [];
   private uModes = new Map<FamilyId, WebGLUniformLocation>();
   private modes: FamilyModes = {
-    dst: 1, wav: 1, wrp: 1, nze: 1, grd: 1, lit: 1, vig: 1, idl: 1,
+    march: 1,
+    sdf: 1,
+    csg: 1,
+    noise: 0,
+    light: 1,
+    fog: 1,
+    fract: 0,
+    deform: 0,
   };
+  private tint: [number, number, number] = [0.35, 0.55, 1.0];
   private start = performance.now();
 
   constructor(canvas: HTMLCanvasElement) {
@@ -85,10 +94,12 @@ export class FingerFieldRenderer {
     const loc = gl.getUniformLocation(prog, 'uResolution');
     const ut = gl.getUniformLocation(prog, 'uTime');
     const uc = gl.getUniformLocation(prog, 'uTipCount');
-    if (!loc || !ut || !uc) throw new Error('missing uniforms');
+    const utint = gl.getUniformLocation(prog, 'uTint');
+    if (!loc || !ut || !uc || !utint) throw new Error('missing uniforms');
     this.uResolution = loc;
     this.uTime = ut;
     this.uTipCount = uc;
+    this.uTint = utint;
 
     for (const m of MODE_UNIFORMS) {
       const u = gl.getUniformLocation(prog, m.name);
@@ -111,14 +122,8 @@ export class FingerFieldRenderer {
     this.modes = { ...modes };
   }
 
-  /** @deprecated use setModes */
-  setModules(enables: Record<string, boolean>): void {
-    const next = { ...this.modes };
-    (Object.keys(enables) as string[]).forEach((k) => {
-      const id = k as FamilyId;
-      if (id in next) next[id] = enables[k] ? Math.max(1, next[id] || 1) : 0;
-    });
-    this.modes = next;
+  setTint(r: number, g: number, b: number): void {
+    this.tint = [r, g, b];
   }
 
   resize(): void {
@@ -145,6 +150,7 @@ export class FingerFieldRenderer {
 
     gl.uniform2f(this.uResolution, this.canvas.width, this.canvas.height);
     gl.uniform1f(this.uTime, (performance.now() - this.start) / 1000);
+    gl.uniform3f(this.uTint, this.tint[0], this.tint[1], this.tint[2]);
 
     for (const m of MODE_UNIFORMS) {
       const loc = this.uModes.get(m.id);

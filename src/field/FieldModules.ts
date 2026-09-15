@@ -15,7 +15,7 @@ export interface FamilyState {
 
 export type ModulesState = Record<FamilyId, FamilyState>;
 
-const LS_KEY = 'fpw.modules.v2';
+const LS_KEY = 'fpw.modules.v3';
 
 export function defaultModulesState(): ModulesState {
   const out = {} as ModulesState;

@@ -6,6 +6,7 @@ import { HandTracker, type TrackedTip } from './tracking/HandTracker';
 import { SettingsPanel } from './ui/SettingsPanel';
 import { FieldModules } from './field/FieldModules';
 import { PalettePanel } from './ui/PalettePanel';
+import { ColorStrip } from './ui/ColorStrip';
 
 const canvas = document.getElementById('gl') as HTMLCanvasElement;
 const video = document.getElementById('webcam') as HTMLVideoElement;
@@ -30,6 +31,8 @@ palette.onChange(() => {
   renderer.setModes(fieldModules.modes());
 });
 renderer.setModes(fieldModules.modes());
+const colors = new ColorStrip();
+colors.onChange(([r, g, b]) => renderer.setTint(r, g, b));
 
 function syncOverlaySize(): void {
   const w = wrap.clientWidth;

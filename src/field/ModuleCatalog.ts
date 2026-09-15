@@ -1,27 +1,25 @@
 /**
- * IqEzles-method sample catalog.
- * Families = pipeline stages; variants = numbered examples from the method manual.
- * Selecting DST[2] + GRD[4] composes those samples in the shader.
- * Cite: RESEARCH/IqEzles_method_for_shader_art.md + https://iquilezles.org/articles/
+ * IqEzles-method sample catalog — heavily sourced from
+ * RESEARCH/IqEzles_method_for_shader_art.md and https://iquilezles.org/articles/
+ * Local PDFs: RESEARCH/pN.pdf
+ *
+ * Families compose: MARCH[i] + LIGHT[j] + FOG[k] + color tint, etc.
  */
 
 export type FamilyId =
-  | 'dst'
-  | 'wav'
-  | 'wrp'
-  | 'nze'
-  | 'grd'
-  | 'lit'
-  | 'vig'
-  | 'idl';
+  | 'march'
+  | 'sdf'
+  | 'csg'
+  | 'noise'
+  | 'light'
+  | 'fog'
+  | 'fract'
+  | 'deform';
 
 export interface SampleVariant {
-  /** 1-based index shown on the rail */
   n: number;
   name: string;
-  /** Method chapter / idea */
   method: string;
-  /** Short GLSL teaching sketch (documentation + future editor) */
   source: string;
 }
 
@@ -30,7 +28,6 @@ export interface FamilyDef {
   label: string;
   title: string;
   blurb: string;
-  /** Default variant n (factory look uses these) */
   defaultVariant: number;
   defaultEnabled: boolean;
   variants: SampleVariant[];
@@ -38,292 +35,322 @@ export interface FamilyDef {
 
 export const FAMILY_DEFS: FamilyDef[] = [
   {
-    id: 'dst',
-    label: 'DST',
-    title: 'Distance / shape',
-    blurb: 'Ch.4 — scalar mass from tip distance.',
+    id: 'march',
+    label: 'MRCH',
+    title: 'Raymarch',
+    blurb: 'Ch.6 / p49 / p65 — worlds with two triangles.',
     defaultVariant: 1,
     defaultEnabled: true,
     variants: [
       {
         n: 1,
-        name: 'Potential 1/r²',
-        method: 'Ch.4 / Ch.15 Recipe A — tip potential',
-        source: `float pot = (0.018 + 0.022*e) / (r*r + 0.018); field += pot;`,
+        name: 'Sphere + floor',
+        method: 'Ch.6 sphere tracing; p49 raymarching DF; tip = light',
+        source: `map = min(sdSphere(p-tip3,0.35), p.y+0.75); shade Lambert+key`,
       },
       {
         n: 2,
-        name: 'Soft circle SDF',
-        method: 'Ch.4 2D circle — soft edge via smoothstep',
-        source: `float sd = r - (0.04 + 0.03*e); field += 1.0 - smoothstep(0.0, 0.08, sd);`,
+        name: 'Soft-min metaballs',
+        method: 'Ch.5 smin (p50) — organic union of tip + satellites',
+        source: `d = smin(sdSphere(p-c0,r0), sdSphere(p-c1,r1), 0.25);`,
       },
       {
         n: 3,
-        name: 'Box L∞',
-        method: 'Ch.4 L∞ / box metric (p6)',
-        source: `float bx = max(abs(d.x), abs(d.y)); field += 0.04 / (bx*bx + 0.02);`,
-      },
-      {
-        n: 4,
-        name: 'Exp falloff',
-        method: 'Ch.2 remap — gaussian blob',
-        source: `field += e * exp(-18.0 * r*r);`,
-      },
-      {
-        n: 5,
-        name: 'Ring shell',
-        method: 'Ch.2 smoothstep ring',
-        source: `float shell = abs(r - 0.07); field += e * (1.0 - smoothstep(0.0, 0.04, shell));`,
-      },
-    ],
-  },
-  {
-    id: 'wav',
-    label: 'WAV',
-    title: 'Waves',
-    blurb: 'Ch.2/14 trig — ripples & modulation.',
-    defaultVariant: 1,
-    defaultEnabled: true,
-    variants: [
-      {
-        n: 1,
-        name: 'Decaying ripples',
-        method: 'Ch.15 Recipe A ripples (factory)',
-        source: `field += 0.12 * sin(14.0*r - uTime*1.6 - e*4.0) * exp(-5.5*r) * (0.35+e);`,
-      },
-      {
-        n: 2,
-        name: 'Slow rings',
-        method: 'Ch.2 — lower frequency travel',
-        source: `field += 0.1 * sin(7.0*r - uTime*0.7) * exp(-3.5*r) * e;`,
-      },
-      {
-        n: 3,
-        name: 'FM-ish',
-        method: 'Ch.14 FM synthesis as wave inspiration (p124)',
-        source: `float m = sin(uTime*0.8 + e*3.0); field += 0.1 * sin(12.0*r - uTime*2.0 + 2.0*m) * exp(-5.0*r);`,
-      },
-      {
-        n: 4,
-        name: 'Standing',
-        method: 'Ch.2 sin×sin standing pattern',
-        source: `field += 0.08 * sin(16.0*r) * cos(uTime*1.2) * exp(-4.0*r) * e;`,
-      },
-    ],
-  },
-  {
-    id: 'wrp',
-    label: 'WRP',
-    title: 'Domain warp',
-    blurb: 'Ch.8 domain warping (p19).',
-    defaultVariant: 1,
-    defaultEnabled: true,
-    variants: [
-      {
-        n: 1,
-        name: 'Sin/cos weave',
-        method: 'Ch.8 / factory warp',
-        source: `q.x += 0.025*sin(7.0*p.y + uTime*0.7 + field*1.4); q.y += 0.025*cos(7.0*p.x - uTime*0.5);`,
-      },
-      {
-        n: 2,
-        name: 'Tip pull',
-        method: 'Ch.15 Recipe B — warp toward tip',
-        source: `q += 0.06 * e * normalize(d + 1e-4) * exp(-4.0*r);`,
-      },
-      {
-        n: 3,
-        name: 'Polar swirl',
-        method: 'Ch.10 plane deformations — swirl',
-        source: `float a = atan(d.y, d.x) + 0.8*e*exp(-3.0*r); q = tip + r*vec2(cos(a),sin(a));`,
-      },
-      {
-        n: 4,
-        name: 'Hash jitter',
-        method: 'Ch.8 cheap pseudo-warp',
-        source: `float h = fract(sin(dot(p, vec2(41.2,19.7)))*7842.1); q += (h-0.5)*0.04*(0.3+field);`,
-      },
-    ],
-  },
-  {
-    id: 'nze',
-    label: 'NZE',
-    title: 'Noise / flow',
-    blurb: 'Ch.8 fBM / Voronoi / secondary sample.',
-    defaultVariant: 1,
-    defaultEnabled: true,
-    variants: [
-      {
-        n: 1,
-        name: 'Warped falloff',
-        method: 'Ch.15 factory flow in q',
-        source: `warped += (0.012 + 0.018*e) / (length(q-tip)+0.05);`,
-      },
-      {
-        n: 2,
-        name: 'Value noise',
-        method: 'Ch.8 value noise (teaching hash)',
-        source: `float n = fract(sin(dot(q*6.0, vec2(12.9,78.2)))*43758.5); warped += 0.08 * n * e;`,
-      },
-      {
-        n: 3,
-        name: 'fBM-ish',
-        method: 'Ch.8 fBM octaves (p16) — 3 taps',
-        source: `vec2 pq=q*3.0; float f=0.0; float a=0.5; for(int o=0;o<3;o++){ f+=a*fract(sin(dot(pq,vec2(27.1,91.7)))*43758.5); pq*=2.03; a*=0.5;} warped+=0.1*f;`,
-      },
-      {
-        n: 4,
-        name: 'Voronoi edge',
-        method: 'Ch.8 voronoi edges (p22)',
-        source: `vec2 g=floor(q*5.0); vec2 f=fract(q*5.0); float md=1.0; for(int j=-1;j<=1;j++) for(int i=-1;i<=1;i++){ vec2 b=vec2(float(i),float(j)); vec2 o=fract(sin(vec2(dot(g+b,vec2(127.1,311.7)),dot(g+b,vec2(269.5,183.3))))*43758.5); md=min(md,length(b+o-f)); } warped+=0.12*(1.0-smoothstep(0.0,0.25,md));`,
-      },
-      {
-        n: 5,
-        name: 'Domain dots',
+        name: 'Pillar city',
         method: 'Ch.5 domain repetition (p51)',
-        source: `vec2 c=fract(q*8.0)-0.5; warped += 0.06 * exp(-30.0*dot(c,c));`,
-      },
-    ],
-  },
-  {
-    id: 'grd',
-    label: 'GRD',
-    title: 'Grade / palette',
-    blurb: 'Ch.3 cosine palettes (p39).',
-    defaultVariant: 1,
-    defaultEnabled: true,
-    variants: [
-      {
-        n: 1,
-        name: 'Factory cosine',
-        method: 'Ch.3 classic a+b*cos',
-        source: `col = a0 + b0 * cos(6.28318*(c0*t + d0));`,
-      },
-      {
-        n: 2,
-        name: 'Fire',
-        method: 'Ch.3 palette vectors — warm',
-        source: `col = vec3(0.5,0.2,0.05) + vec3(0.5,0.35,0.15)*cos(6.28318*(vec3(1.0,0.8,0.4)*t + vec3(0.0,0.2,0.5)));`,
-      },
-      {
-        n: 3,
-        name: 'Ice',
-        method: 'Ch.3 palette — cool',
-        source: `col = vec3(0.1,0.15,0.25) + vec3(0.3,0.45,0.55)*cos(6.28318*(vec3(0.6,0.8,1.0)*t + vec3(0.3,0.5,0.7)));`,
+        source: `q=p; q.xz=mod(q.xz+0.5,1.0)-0.5; map=sdBox(q,vec3(0.2,1.0,0.2));`,
       },
       {
         n: 4,
-        name: 'Mono',
-        method: 'Ch.2 remap — luminance only',
-        source: `col = vec3(t*0.55 + 0.08);`,
+        name: 'Torus temple',
+        method: 'Ch.4 torus SDF + box subtract CSG',
+        source: `map = max(sdTorus(p,vec2(0.55,0.12)), -sdBox(p,vec3(0.35)));`,
       },
       {
         n: 5,
-        name: 'Band zebra',
-        method: 'Ch.9 filterable checkers spirit — bands',
-        source: `float z = step(0.5, fract(t*4.0)); col = mix(vec3(0.08), vec3(0.85,0.8,0.7), z);`,
+        name: 'FBM terrain',
+        method: 'Ch.6/8 terrains (p63) + fBM height (p16)',
+        source: `map = p.y - fbm(p.xz)*0.35; tip moves sun`,
       },
     ],
   },
   {
-    id: 'lit',
-    label: 'LIT',
-    title: 'Light accent',
-    blurb: 'Ch.7 lighting accents / core.',
+    id: 'sdf',
+    label: 'SDF',
+    title: 'Distance shapes',
+    blurb: 'Ch.4 — exact SDFs (p1–p5, p10–p11). Used inside map().',
     defaultVariant: 1,
     defaultEnabled: true,
     variants: [
       {
         n: 1,
-        name: 'Tip core',
-        method: 'Ch.15 / factory core glow',
-        source: `col += vec3(1.0,0.85,0.55) * exp(-55.0*nearest) * 0.45;`,
+        name: 'Sphere',
+        method: 'p1/p10 sphere — exact |p|-r',
+        source: `sdSphere(p,r) = length(p)-r;`,
       },
       {
         n: 2,
-        name: 'Soft bloom',
-        method: 'Ch.7 softer key',
-        source: `col += vec3(0.9,0.75,1.0) * exp(-18.0*nearest) * 0.35;`,
+        name: 'Box',
+        method: 'p1/p11 box',
+        source: `sdBox(p,b) = length(max(abs(p)-b,0))+min(max(abs(p)),0);`,
       },
       {
         n: 3,
-        name: 'AO-ish',
-        method: 'Ch.7 cavity darken from field',
-        source: `col *= 0.55 + 0.45 * smoothstep(0.0, 0.35, nearest);`,
+        name: 'Rounded box',
+        method: 'p54 rounded boxes',
+        source: `sdRoundBox(p,b,r)`,
       },
       {
         n: 4,
-        name: 'Rim',
-        method: 'Ch.7 rim from tip angle proxy',
-        source: `col += vec3(0.6,0.8,1.0) * pow(1.0 - exp(-8.0*nearest), 3.0) * 0.25;`,
+        name: 'Capsule',
+        method: 'p1 capsule / segment',
+        source: `sdCapsule(p,a,b,r)`,
+      },
+      {
+        n: 5,
+        name: 'Octahedron',
+        method: 'p1 octahedron SDF',
+        source: `sdOctahedron(p,s)`,
       },
     ],
   },
   {
-    id: 'vig',
-    label: 'VIG',
-    title: 'Atmosphere',
-    blurb: 'Ch.7 fog / vignette / remap.',
+    id: 'csg',
+    label: 'CSG',
+    title: 'Combine',
+    blurb: 'Ch.5 — bool / smin / repeat.',
     defaultVariant: 1,
     defaultEnabled: true,
     variants: [
       {
         n: 1,
-        name: 'Vignette',
-        method: 'Factory vig',
-        source: `col *= 0.35 + 0.65 * smoothstep(1.2, 0.25, length(uv-0.5));`,
+        name: 'Union min',
+        method: 'Ch.5 boolean union',
+        source: `d = min(dA,dB);`,
+      },
+      {
+        n: 2,
+        name: 'Smooth min',
+        method: 'p50 smooth minimum',
+        source: `d = smin(dA,dB,k);`,
+      },
+      {
+        n: 3,
+        name: 'Subtraction',
+        method: 'Ch.5 max(a,-b)',
+        source: `d = max(dA,-dB);`,
+      },
+      {
+        n: 4,
+        name: 'Xor carve',
+        method: 'p56 xor SDFs spirit',
+        source: `d = max(min(dA,dB), -max(dA,dB));`,
+      },
+      {
+        n: 5,
+        name: 'Limited repeat',
+        method: 'p51 domain repetition limited',
+        source: `q = p - clamp(round(p/s),-lim,lim)*s;`,
+      },
+    ],
+  },
+  {
+    id: 'noise',
+    label: 'NZE',
+    title: 'Noise / warp',
+    blurb: 'Ch.8 — fBM, warp, voronoi (p16–p22).',
+    defaultVariant: 1,
+    defaultEnabled: false,
+    variants: [
+      {
+        n: 1,
+        name: 'fBM displacement',
+        method: 'p16 fBM on surface',
+        source: `d -= 0.08*fbm(p*2.0);`,
+      },
+      {
+        n: 2,
+        name: 'Domain warp',
+        method: 'p19 domain warping',
+        source: `p += 0.25*fbm3(p);`,
+      },
+      {
+        n: 3,
+        name: 'Voronoi cells',
+        method: 'p20–p22 voronoise / edges',
+        source: `d = min(d, voronoi(p.xz)-0.02);`,
+      },
+      {
+        n: 4,
+        name: 'Gradient noise',
+        method: 'p17 gradient noise',
+        source: `n = gnoise(p);`,
+      },
+      {
+        n: 5,
+        name: 'Warped marble',
+        method: 'Ch.8 / Ch.15 Recipe B',
+        source: `q=p+fbm(p); col*=marble(q);`,
+      },
+    ],
+  },
+  {
+    id: 'light',
+    label: 'LIT',
+    title: 'Lighting',
+    blurb: 'Ch.7 — outdoors, soft shadow, AO (p52, p78, p80).',
+    defaultVariant: 1,
+    defaultEnabled: true,
+    variants: [
+      {
+        n: 1,
+        name: 'Key + sky fill',
+        method: 'p78 outdoors 3-light spirit (key+sky)',
+        source: `sun*shadow + sky*(0.5+0.5*n.y)`,
+      },
+      {
+        n: 2,
+        name: 'Soft shadow',
+        method: 'p52 soft shadows in raymarched SDFs',
+        source: `shadow = softShadow(p,lDir);`,
+      },
+      {
+        n: 3,
+        name: 'SDF AO',
+        method: 'p80 multires AO spirit',
+        source: `ao = calcAO(p,n);`,
+      },
+      {
+        n: 4,
+        name: 'Rim + key',
+        method: 'Ch.7 rim accent',
+        source: `col += rim*pow(1.-dot(n,v),3.);`,
+      },
+      {
+        n: 5,
+        name: 'Specular Blinn',
+        method: 'Ch.7 specular lobe',
+        source: `spec = pow(sat(dot(n,h)),64.);`,
+      },
+    ],
+  },
+  {
+    id: 'fog',
+    label: 'FOG',
+    title: 'Atmosphere',
+    blurb: 'Ch.7 better fog (p79) + vignette.',
+    defaultVariant: 1,
+    defaultEnabled: true,
+    variants: [
+      {
+        n: 1,
+        name: 'Distance fog',
+        method: 'p79 colored distance fog',
+        source: `col = mix(col,fogCol,1.-exp(-d*d*k));`,
       },
       {
         n: 2,
         name: 'Height fog',
-        method: 'Ch.7 better fog spirit (p79)',
-        source: `col = mix(col, vec3(0.12,0.12,0.16), smoothstep(0.2, 1.0, uv.y)*0.55);`,
+        method: 'p79 height fog',
+        source: `fog *= exp(-h*k);`,
       },
       {
         n: 3,
-        name: 'Letterbox',
-        method: 'Ch.2 smoothstep mask',
-        source: `float m = smoothstep(0.0,0.08,uv.y)*smoothstep(0.0,0.08,1.0-uv.y); col *= 0.25 + 0.75*m;`,
+        name: 'Sun in fog',
+        method: 'p79 sun disc through fog',
+        source: `fogCol += sunGlow;`,
       },
       {
         n: 4,
-        name: 'Center punch',
-        method: 'Ch.2 inverse vig',
-        source: `col *= 0.7 + 0.5 * (1.0 - smoothstep(0.1, 0.7, length(uv-0.5)));`,
+        name: 'Vignette',
+        method: 'presentation vignette',
+        source: `col *= smoothstep(1.2,0.3,len(uv-0.5));`,
+      },
+      {
+        n: 5,
+        name: 'Letterbox fog',
+        method: 'Ch.2 mask + fog',
+        source: `col = mix(fogCol,col,letterbox);`,
       },
     ],
   },
   {
-    id: 'idl',
-    label: 'IDL',
-    title: 'Idle field',
-    blurb: 'Quiet backdrop when tip energy fades.',
+    id: 'fract',
+    label: 'FRCT',
+    title: 'Fractals',
+    blurb: 'Ch.11 — mandelbulb / julia / traps (p129–p135).',
     defaultVariant: 1,
-    defaultEnabled: true,
+    defaultEnabled: false,
     variants: [
       {
         n: 1,
-        name: 'Soft noise idle',
-        method: 'Factory idle',
-        source: `idleCol = mix(vec3(0.07), vec3(0.12,0.10,0.18), 0.5+0.5*n);`,
+        name: 'Mandelbulb DE',
+        method: 'p130 mandelbulb',
+        source: `d = mandelbulbDE(p);`,
       },
       {
         n: 2,
-        name: 'Flat void',
-        method: 'Minimal idle',
-        source: `idleCol = vec3(0.05);`,
+        name: '3D Julia',
+        method: 'p131 3D Julia sets',
+        source: `d = juliaDE(p,c);`,
       },
       {
         n: 3,
-        name: 'Scanlines',
-        method: 'Ch.10 oldschool',
-        source: `idleCol = vec3(0.06) + 0.03*step(0.5, fract(uv.y*90.0 + uTime));`,
+        name: 'Orbit trap color',
+        method: 'p132–p135 orbit traps',
+        source: `trap = min(trap, length(z.xy));`,
       },
       {
         n: 4,
-        name: 'Drifting fBM',
-        method: 'Ch.8 idle fBM',
-        source: `float f = fract(sin(dot(uv*4.0+uTime*0.05, vec2(12.1,47.3)))*45321.1); idleCol = mix(vec3(0.05), vec3(0.14,0.12,0.2), f);`,
+        name: 'Menger sponge',
+        method: 'p62 menger fractal',
+        source: `d = menger(p);`,
+      },
+      {
+        n: 5,
+        name: 'Hybrid bulb+sphere',
+        method: 'Ch.11 hybrid with base SDF',
+        source: `d = smin(sdSphere(p,1.), bulb, 0.2);`,
+      },
+    ],
+  },
+  {
+    id: 'deform',
+    label: 'DFRM',
+    title: 'Deformations',
+    blurb: 'Ch.10 plane deform / twist (p100).',
+    defaultVariant: 1,
+    defaultEnabled: false,
+    variants: [
+      {
+        n: 1,
+        name: 'Twist Y',
+        method: 'Ch.5 domain deformation twist',
+        source: `p.xz *= rot(p.y*k);`,
+      },
+      {
+        n: 2,
+        name: 'Bend',
+        method: 'domain bend',
+        source: `p = bend(p,k);`,
+      },
+      {
+        n: 3,
+        name: 'Polar tunnel',
+        method: 'p100 plane deformations tunnel',
+        source: `uv = vec2(a/pi, 1./r)+t;`,
+      },
+      {
+        n: 4,
+        name: 'Feedback trails',
+        method: 'p101 feedback effect spirit',
+        source: `col = mix(col, prev, 0.85);`,
+      },
+      {
+        n: 5,
+        name: 'Kaleido',
+        method: 'Ch.10 symmetry fold',
+        source: `p.xy = abs(p.xy);`,
       },
     ],
   },
@@ -334,3 +361,13 @@ export function familyById(id: FamilyId): FamilyDef {
   if (!f) throw new Error(`unknown family ${id}`);
   return f;
 }
+
+export const ROYGBIV = [
+  { id: 'R', hex: '#ff2d2d', name: 'Red' },
+  { id: 'O', hex: '#ff8a1a', name: 'Orange' },
+  { id: 'Y', hex: '#ffd400', name: 'Yellow' },
+  { id: 'G', hex: '#2ee66b', name: 'Green' },
+  { id: 'B', hex: '#2f7bff', name: 'Blue' },
+  { id: 'I', hex: '#5b4dff', name: 'Indigo' },
+  { id: 'V', hex: '#c43dff', name: 'Violet' },
+] as const;
