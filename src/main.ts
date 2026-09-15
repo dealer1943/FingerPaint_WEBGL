@@ -7,6 +7,7 @@ import { SettingsPanel } from './ui/SettingsPanel';
 import { FieldModules } from './field/FieldModules';
 import { PalettePanel } from './ui/PalettePanel';
 import { WorldCamera } from './world/WorldCamera';
+import { ClayWheel } from './world/ClayWheel';
 import { exploreFree, mazeFree, waterFree } from './world/collide';
 
 const canvas = document.getElementById('gl') as HTMLCanvasElement;
@@ -36,11 +37,15 @@ new SettingsPanel(settings);
 const fieldModules = new FieldModules();
 const palette = new PalettePanel(fieldModules);
 const worldCam = new WorldCamera();
+const clayWheel = new ClayWheel();
+let pourTilt: [number, number] = [0, 0];
 
 function applyPortal(): void {
   const s = fieldModules.get();
-  worldCam.setMode(s.active);
-  renderer.setPortal(fieldModules.uniforms());
+  let mode = s.active as 'explore' | 'maze' | 'water' | 'pour' | 'clay' | 'clay-top';
+  if (s.active === 'clay' && s.clay === 'top') mode = 'clay-top';
+  else if (s.active === 'clay') mode = 'clay';
+  worldCam.setMode(mode);
 }
 palette.onChange(() => applyPortal());
 applyPortal();
@@ -117,7 +122,7 @@ async function boot(): Promise<void> {
   }
   camOk = await camP;
   if (camOk && trackOk) {
-    setStatus('Portal open — point a finger to look / move. WILD · MAZE · SEA');
+    setStatus('Portal open — WILD · MAZE · SEA · POUR · CLAY');
   }
 }
 
@@ -163,17 +168,42 @@ function frame(now: number): void {
 
   const smooth = smoother.update(live, dt, s, Math.max(2, s.maxTips));
   const tip = smooth[0] ?? null;
-  const portal = fieldModules.get().active;
+  const portalState = fieldModules.get();
+  const portal = portalState.active;
   const collide =
     portal === 'maze' ? mazeFree : portal === 'water' ? waterFree : exploreFree;
+
+  if (portal === 'pour' && tip) {
+    const targetX = (tip.y - 0.5) * 0.9;
+    const targetZ = (tip.x - 0.5) * 0.9;
+    const k = Math.min(1, dt * 3);
+    pourTilt[0] += (targetX - pourTilt[0]) * k;
+    pourTilt[1] += (targetZ - pourTilt[1]) * k;
+  }
+
+  if (portal === 'clay') {
+    clayWheel.update(tip, dt, portalState.clay);
+    let mode = portalState.clay === 'top' ? 'clay-top' as const : 'clay' as const;
+    worldCam.setMode(mode);
+  }
+
   worldCam.update(tip, dt, collide);
   renderer.setCamera(camBasis());
-  renderer.setPortal(fieldModules.uniforms());
+  const u = fieldModules.uniforms();
+  renderer.setPortal({
+    ...u,
+    tilt: [pourTilt[0], pourTilt[1]],
+    clayAngle: clayWheel.angle,
+    clayR: clayWheel.radii.slice(),
+  });
   renderer.render();
 
   if (tip) {
+    let hint = 'move with finger';
+    if (portal === 'pour') hint = 'tilt canvas with hand';
+    if (portal === 'clay') hint = 'mold the clay';
     setStatus(
-      `${portal.toUpperCase()} · tip ${(tip.energy * 100) | 0}% · move with finger`,
+      `${portal.toUpperCase()} · tip ${(tip.energy * 100) | 0}% · ${hint}`,
     );
   }
 

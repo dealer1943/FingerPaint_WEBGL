@@ -2,10 +2,15 @@ precision highp float;
 
 uniform vec2 uResolution;
 uniform float uTime;
-uniform float uPortal; // 1 explore, 2 maze, 3 water
+uniform float uPortal; // 1 explore, 2 maze, 3 water, 4 pour, 5 clay
 uniform float uExplore[7]; // jungle mtns valley river day night rain
 uniform float uMaze; // 1..7
 uniform float uWater; // 1..5
+uniform float uPour; // 1..5 drip sheet splatter marble thick
+uniform float uClay; // 1..5 front top open pull smooth
+uniform vec2 uTilt; // canvas pitch/roll from hand
+uniform float uClayAngle;
+uniform float uClayR[8]; // lathe radii base→rim
 uniform vec3 uCamPos;
 uniform vec3 uCamFwd;
 uniform vec3 uCamRight;
@@ -153,10 +158,105 @@ float mapWater(vec3 p) {
   return d;
 }
 
+float paintFlow(vec2 uv) {
+  // uv on canvas; gravity from tilt
+  vec2 g = normalize(uTilt + vec2(0.001));
+  float along = dot(uv, g);
+  float across = dot(uv, vec2(-g.y, g.x));
+  float theme = uPour;
+  float f = 0.0;
+  if (theme < 1.5) {
+    // drip streams
+    float lane = floor(across * 6.0);
+    float w = 0.04 + 0.02 * hash21(vec2(lane, 2.0));
+    f = exp(-pow(across * 6.0 - lane - 0.5, 2.0) / (w * 12.0));
+    f *= smoothstep(-0.9, 0.6, along + uTime * (0.15 + 0.1 * hash21(vec2(lane, 1.0))));
+  } else if (theme < 2.5) {
+    // sheet curtain
+    f = smoothstep(0.55, 0.05, abs(across) * 0.7) * smoothstep(-1.0, 0.8, along + uTime * 0.12);
+  } else if (theme < 3.5) {
+    // splatter
+    float n = vn(uv * 8.0 + vec2(uTime * 0.2, 0.0));
+    f = step(0.72, n) * smoothstep(0.72, 0.95, n);
+  } else if (theme < 4.5) {
+    // marble veins
+    vec2 w = uv + 0.35 * vec2(fbm(uv * 2.0), fbm(uv * 2.0 + 3.1));
+    f = abs(sin(w.x * 6.0 + w.y * 4.0 + along * 2.0));
+    f = pow(1.0 - f, 4.0);
+  } else {
+    // thick body — slow blobs
+    float n = fbm(uv * 2.5 - g * uTime * 0.05);
+    f = smoothstep(0.35, 0.75, n);
+  }
+  return clamp(f, 0.0, 1.0);
+}
+
+float mapPour(vec3 p) {
+  // tilted canvas around origin, facing +Y roughly
+  float tx = uTilt.x;
+  float tz = uTilt.y;
+  mat2 rx = rot(tx);
+  // rotate around X then Z
+  vec3 q = p;
+  q.yz = rx * q.yz;
+  mat2 rz = rot(tz);
+  q.xy = rz * q.xy;
+  // thin board
+  float board = sdBox(q - vec3(0.0, 0.0, 0.0), vec3(1.6, 0.04, 1.1));
+  // paint volume slightly above board
+  vec2 uv = q.xz / 1.5;
+  float paint = paintFlow(uv);
+  float puddle = sdBox(q - vec3(0.0, 0.06, 0.0), vec3(1.5, 0.02 + paint * 0.12, 1.0));
+  puddle = max(puddle, length(max(abs(uv) - vec2(1.0), 0.0)) - 0.02);
+  // only where paint exists
+  puddle += (1.0 - paint) * 0.25;
+  return min(board, puddle);
+}
+
+float clayRadiusAt(float h) {
+  // h in 0..1 base→rim
+  float t = clamp(h, 0.0, 1.0) * 7.0;
+  float i0 = floor(t);
+  float f = fract(t);
+  float r0 = uClayR[0];
+  float r1 = uClayR[1];
+  if (i0 < 0.5) { r0 = uClayR[0]; r1 = uClayR[1]; }
+  else if (i0 < 1.5) { r0 = uClayR[1]; r1 = uClayR[2]; }
+  else if (i0 < 2.5) { r0 = uClayR[2]; r1 = uClayR[3]; }
+  else if (i0 < 3.5) { r0 = uClayR[3]; r1 = uClayR[4]; }
+  else if (i0 < 4.5) { r0 = uClayR[4]; r1 = uClayR[5]; }
+  else if (i0 < 5.5) { r0 = uClayR[5]; r1 = uClayR[6]; }
+  else { r0 = uClayR[6]; r1 = uClayR[7]; }
+  return mix(r0, r1, f);
+}
+
+float mapClay(vec3 p) {
+  // spinning wheel + lathe body
+  vec3 q = p;
+  q.xz = rot(uClayAngle) * q.xz;
+  float h = clamp(q.y, 0.0, 1.4);
+  float t = h / 1.4;
+  float R = clayRadiusAt(t);
+  float radial = length(q.xz) - R;
+  // hollow a bit for open/top feel
+  float hollow = length(q.xz) - max(0.05, R * 0.55);
+  float shell = max(radial, -hollow - 0.02);
+  // only between base and rim
+  shell = max(shell, -q.y);
+  shell = max(shell, q.y - 1.4);
+  // wheel plate
+  float plate = sdCapsule(q, vec3(0.0, -0.05, 0.0), vec3(0.0, 0.02, 0.0), 0.75);
+  // stand
+  float stand = sdCapsule(q, vec3(0.0, -0.8, 0.0), vec3(0.0, -0.05, 0.0), 0.08);
+  return min(shell, min(plate, stand));
+}
+
 float mapScene(vec3 p) {
   if (uPortal < 1.5) return mapExplore(p);
   if (uPortal < 2.5) return mapMaze(p);
-  return mapWater(p);
+  if (uPortal < 3.5) return mapWater(p);
+  if (uPortal < 4.5) return mapPour(p);
+  return mapClay(p);
 }
 
 vec3 calcNormal(vec3 p) {
@@ -221,6 +321,42 @@ vec3 shadeWater(vec3 p, vec3 rd, float tHit, vec3 n) {
   return col;
 }
 
+vec3 shadePour(vec3 p, vec3 rd, float tHit, vec3 n) {
+  float dif = clamp(dot(n, normalize(vec3(0.4, 0.9, 0.2))), 0.0, 1.0);
+  // reconstruct canvas uv roughly
+  vec3 q = p;
+  q.yz = rot(uTilt.x) * q.yz;
+  q.xy = rot(uTilt.y) * q.xy;
+  vec2 uv = q.xz / 1.5;
+  float paint = paintFlow(uv);
+  vec3 board = vec3(0.92, 0.9, 0.86) * (0.35 + 0.65 * dif);
+  vec3 pigment = vec3(0.75, 0.15, 0.35);
+  if (uPour > 1.5 && uPour < 2.5) pigment = vec3(0.15, 0.35, 0.75);
+  if (uPour > 2.5 && uPour < 3.5) pigment = vec3(0.9, 0.55, 0.1);
+  if (uPour > 3.5 && uPour < 4.5) pigment = mix(vec3(0.1, 0.2, 0.45), vec3(0.85, 0.75, 0.55), paint);
+  if (uPour > 4.5) pigment = vec3(0.45, 0.12, 0.55);
+  vec3 col = mix(board, pigment * (0.4 + 0.6 * dif), paint);
+  float spec = pow(clamp(dot(n, normalize(normalize(vec3(0.4, 0.9, 0.2)) - rd)), 0.0, 1.0), 32.0);
+  col += spec * paint * 0.25;
+  col = mix(col, vec3(0.15), 1.0 - exp(-0.02 * tHit * tHit));
+  return col;
+}
+
+vec3 shadeClay(vec3 p, vec3 rd, float tHit, vec3 n) {
+  float dif = clamp(dot(n, normalize(vec3(0.5, 0.8, 0.3))), 0.0, 1.0);
+  vec3 clay = vec3(0.55, 0.32, 0.22);
+  // wheel metal
+  if (p.y < 0.05) clay = vec3(0.35, 0.36, 0.38);
+  if (p.y < -0.05) clay = vec3(0.25, 0.25, 0.27);
+  vec3 col = clay * (0.25 + 0.75 * dif);
+  vec3 h = normalize(normalize(vec3(0.5, 0.8, 0.3)) - rd);
+  col += pow(clamp(dot(n, h), 0.0, 1.0), 24.0) * 0.12;
+  // wet sheen on body
+  if (p.y > 0.05 && p.y < 1.4) col += vec3(0.08, 0.04, 0.02) * (1.0 - abs(n.y));
+  col = mix(col, vec3(0.12, 0.1, 0.09), 1.0 - exp(-0.04 * tHit * tHit));
+  return col;
+}
+
 void main() {
   vec2 uv = (2.0 * gl_FragCoord.xy - uResolution.xy) / uResolution.y;
   vec3 ro = uCamPos;
@@ -237,8 +373,10 @@ void main() {
 
   vec3 sky = vec3(0.4, 0.55, 0.85);
   if (uPortal < 1.5 && uExplore[5] > 0.5) sky = vec3(0.02, 0.03, 0.08);
-  if (uPortal > 2.5) sky = vec3(0.02, 0.1, 0.16);
+  if (uPortal > 2.5 && uPortal < 3.5) sky = vec3(0.02, 0.1, 0.16);
   if (uPortal > 1.5 && uPortal < 2.5) sky = vec3(0.04, 0.04, 0.05);
+  if (uPortal > 3.5 && uPortal < 4.5) sky = vec3(0.55, 0.52, 0.48);
+  if (uPortal > 4.5) sky = vec3(0.18, 0.16, 0.14);
 
   vec3 col = sky;
   if (uPortal < 1.5) {
@@ -250,7 +388,9 @@ void main() {
     vec3 n = calcNormal(p);
     if (uPortal < 1.5) col = shadeExplore(p, rd, t, n);
     else if (uPortal < 2.5) col = shadeMaze(p, rd, t, n);
-    else col = shadeWater(p, rd, t, n);
+    else if (uPortal < 3.5) col = shadeWater(p, rd, t, n);
+    else if (uPortal < 4.5) col = shadePour(p, rd, t, n);
+    else col = shadeClay(p, rd, t, n);
   }
 
   // rain streaks (explore)

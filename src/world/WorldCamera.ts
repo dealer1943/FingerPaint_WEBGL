@@ -4,7 +4,7 @@
  * Maze/Water: X strafe, Y forward/back, soft collision.
  */
 
-export type CamMode = 'explore' | 'maze' | 'water';
+export type CamMode = 'explore' | 'maze' | 'water' | 'pour' | 'clay' | 'clay-top';
 
 export interface CamPose {
   x: number;
@@ -25,8 +25,15 @@ export class WorldCamera {
         this.pose = { x: 0, y: 1.4, z: 5.5, yaw: 0, pitch: -0.08 };
       } else if (mode === 'maze') {
         this.pose = { x: 0.5, y: 0.9, z: 0.5, yaw: 0, pitch: 0 };
-      } else {
+      } else if (mode === 'water') {
         this.pose = { x: 0, y: -0.4, z: 2.0, yaw: 0, pitch: -0.05 };
+      } else if (mode === 'pour') {
+        this.pose = { x: 0, y: 1.6, z: 3.2, yaw: 0, pitch: -0.45 };
+      } else if (mode === 'clay-top') {
+        this.pose = { x: 0, y: 3.2, z: 0.01, yaw: 0, pitch: -1.4 };
+      } else {
+        // clay front
+        this.pose = { x: 0, y: 1.1, z: 2.8, yaw: 0, pitch: -0.12 };
       }
     }
   }
@@ -41,6 +48,10 @@ export class WorldCamera {
     const dy = tip ? (tip.y - 0.5) * 2 : 0;
     const boost = tip ? 0.55 + tip.energy * 1.2 : 0.35;
 
+    if (this.mode === 'pour' || this.mode === 'clay' || this.mode === 'clay-top') {
+      // studio cams are staged; tip drives sim, not walk
+      return;
+    }
     if (this.mode === 'explore') {
       p.yaw += dx * 1.1 * dt * boost;
       p.pitch = clamp(p.pitch - dy * 0.7 * dt * boost, -1.2, 1.2);

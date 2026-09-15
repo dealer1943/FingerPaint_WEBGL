@@ -1,10 +1,9 @@
 /**
- * Portal worlds — three immersive families (not a tutorial rail).
- * Sourced from IqEzles method (terrain fBM, domain repeat, fog, SDFs).
- * https://iquilezles.org/articles/ + RESEARCH/IqEzles_method_for_shader_art.md
+ * Portal worlds — immersive families (not a tutorial rail).
+ * IQ-sourced terrain/fog/SDF + studio sims (pour / clay).
  */
 
-export type PortalId = 'explore' | 'maze' | 'water';
+export type PortalId = 'explore' | 'maze' | 'water' | 'pour' | 'clay';
 
 export type ExploreLayer =
   | 'jungle'
@@ -31,6 +30,10 @@ export type WaterTheme =
   | 'pond'
   | 'lake';
 
+export type PourTheme = 'drip' | 'sheet' | 'splatter' | 'marble' | 'thick';
+
+export type ClayMode = 'front' | 'top' | 'open' | 'pull' | 'smooth';
+
 export interface LayerDef {
   id: string;
   label: string;
@@ -43,7 +46,6 @@ export interface PortalDef {
   label: string;
   title: string;
   blurb: string;
-  /** explore = multi-select layers (day XOR night); maze/water = pick one theme */
   mode: 'layers' | 'pick';
   layers: LayerDef[];
 }
@@ -95,6 +97,34 @@ export const PORTAL_DEFS: PortalDef[] = [
       { id: 'lake', label: 'LAK', title: 'Lake', method: 'mid depth + godrays' },
     ],
   },
+  {
+    id: 'pour',
+    label: 'POUR',
+    title: 'Paint pour',
+    blurb: 'Paint falls on a canvas — hand tilts the board.',
+    mode: 'pick',
+    layers: [
+      { id: 'drip', label: 'DRP', title: 'Drip', method: 'thin streams + gravity tilt' },
+      { id: 'sheet', label: 'SHT', title: 'Sheet pour', method: 'wide curtain of paint' },
+      { id: 'splatter', label: 'SPL', title: 'Splatter', method: 'impact droplets' },
+      { id: 'marble', label: 'MRB', title: 'Marble', method: 'domain-warped color veins' },
+      { id: 'thick', label: 'THK', title: 'Thick body', method: 'high viscosity slow flow' },
+    ],
+  },
+  {
+    id: 'clay',
+    label: 'CLAY',
+    title: 'Clay studio',
+    blurb: 'Spinning wheel — finger molds clay. Front / top cams.',
+    mode: 'pick',
+    layers: [
+      { id: 'front', label: 'FRT', title: 'Front view', method: 'side camera on the wheel' },
+      { id: 'top', label: 'TOP', title: 'Top down', method: 'spread the inside' },
+      { id: 'open', label: 'OPN', title: 'Open form', method: 'push walls outward' },
+      { id: 'pull', label: 'PUL', title: 'Pull up', method: 'raise the cylinder' },
+      { id: 'smooth', label: 'SMU', title: 'Smooth', method: 'soften profile ridges' },
+    ],
+  },
 ];
 
 export function portalById(id: PortalId): PortalDef {
@@ -103,5 +133,4 @@ export function portalById(id: PortalId): PortalDef {
   return p;
 }
 
-/** @deprecated old family API removed — portals only */
 export type FamilyId = PortalId;

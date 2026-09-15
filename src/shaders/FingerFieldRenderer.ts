@@ -13,6 +13,11 @@ export interface PortalUniforms {
   explore: number[];
   maze: number;
   water: number;
+  pour: number;
+  clay: number;
+  tilt: [number, number];
+  clayAngle: number;
+  clayR: number[];
 }
 
 function compile(gl: WebGLRenderingContext, type: number, src: string): WebGLShader {
@@ -39,6 +44,11 @@ export class FingerFieldRenderer {
   private uExplore: WebGLUniformLocation;
   private uMaze: WebGLUniformLocation;
   private uWater: WebGLUniformLocation;
+  private uPour: WebGLUniformLocation;
+  private uClay: WebGLUniformLocation;
+  private uTilt: WebGLUniformLocation;
+  private uClayAngle: WebGLUniformLocation;
+  private uClayR: WebGLUniformLocation;
   private uCamPos: WebGLUniformLocation;
   private uCamFwd: WebGLUniformLocation;
   private uCamRight: WebGLUniformLocation;
@@ -48,6 +58,11 @@ export class FingerFieldRenderer {
     explore: [1, 1, 0, 1, 1, 0, 0],
     maze: 1,
     water: 1,
+    pour: 1,
+    clay: 1,
+    tilt: [0, 0],
+    clayAngle: 0,
+    clayR: [0.35, 0.42, 0.48, 0.5, 0.48, 0.4, 0.32, 0.28],
   };
   private cam: CamUniforms = {
     pos: [0, 1.4, 5.5],
@@ -100,6 +115,11 @@ export class FingerFieldRenderer {
     this.uExplore = need('uExplore[0]');
     this.uMaze = need('uMaze');
     this.uWater = need('uWater');
+    this.uPour = need('uPour');
+    this.uClay = need('uClay');
+    this.uTilt = need('uTilt');
+    this.uClayAngle = need('uClayAngle');
+    this.uClayR = need('uClayR[0]');
     this.uCamPos = need('uCamPos');
     this.uCamFwd = need('uCamFwd');
     this.uCamRight = need('uCamRight');
@@ -109,11 +129,18 @@ export class FingerFieldRenderer {
   }
 
   setPortal(u: PortalUniforms): void {
+    const clayR = (u.clayR || []).slice(0, 8);
+    while (clayR.length < 8) clayR.push(0.3);
     this.portal = {
       portal: u.portal,
       explore: u.explore.slice(0, 7),
       maze: u.maze,
       water: u.water,
+      pour: u.pour,
+      clay: u.clay,
+      tilt: [u.tilt[0], u.tilt[1]],
+      clayAngle: u.clayAngle,
+      clayR,
     };
   }
 
@@ -151,6 +178,11 @@ export class FingerFieldRenderer {
     gl.uniform1fv(this.uExplore, new Float32Array(ex));
     gl.uniform1f(this.uMaze, this.portal.maze);
     gl.uniform1f(this.uWater, this.portal.water);
+    gl.uniform1f(this.uPour, this.portal.pour);
+    gl.uniform1f(this.uClay, this.portal.clay);
+    gl.uniform2f(this.uTilt, this.portal.tilt[0], this.portal.tilt[1]);
+    gl.uniform1f(this.uClayAngle, this.portal.clayAngle);
+    gl.uniform1fv(this.uClayR, new Float32Array(this.portal.clayR));
     gl.uniform3f(this.uCamPos, this.cam.pos[0], this.cam.pos[1], this.cam.pos[2]);
     gl.uniform3f(this.uCamFwd, this.cam.fwd[0], this.cam.fwd[1], this.cam.fwd[2]);
     gl.uniform3f(this.uCamRight, this.cam.right[0], this.cam.right[1], this.cam.right[2]);

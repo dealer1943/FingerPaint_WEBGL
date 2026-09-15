@@ -6,6 +6,8 @@ import {
   type ExploreLayer,
   type MazeTheme,
   type WaterTheme,
+  type PourTheme,
+  type ClayMode,
 } from '../field/FieldModules';
 
 const LS_OPEN = 'fpw.paletteOpen';
@@ -132,10 +134,20 @@ export class PalettePanel {
             b.addEventListener('click', () => {
               this.modules.setMaze(layer.id as MazeTheme);
             });
-          } else {
+          } else if (def.id === 'water') {
             on = s.water === layer.id;
             b.addEventListener('click', () => {
               this.modules.setWater(layer.id as WaterTheme);
+            });
+          } else if (def.id === 'pour') {
+            on = s.pour === layer.id;
+            b.addEventListener('click', () => {
+              this.modules.setPour(layer.id as PourTheme);
+            });
+          } else {
+            on = s.clay === layer.id;
+            b.addEventListener('click', () => {
+              this.modules.setClay(layer.id as ClayMode);
             });
           }
           b.classList.toggle('on', on);
