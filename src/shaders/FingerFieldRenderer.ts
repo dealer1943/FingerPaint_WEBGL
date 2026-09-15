@@ -1,5 +1,6 @@
 import vertSrc from './fullscreen.vert.glsl?raw';
 import fragSrc from './fingerField.frag.glsl?raw';
+import type { ModuleId } from '../field/FieldModules';
 
 export interface TipUniform {
   /** Normalized 0..1, mirrored X (same space as webcam overlay). */
@@ -8,6 +9,8 @@ export interface TipUniform {
   /** 0..1 — how extended / energetic the tip feels. */
   energy: number;
 }
+
+export type ModuleEnables = Record<ModuleId, boolean>;
 
 function compile(gl: WebGLRenderingContext, type: number, src: string): WebGLShader {
   const sh = gl.createShader(type);
@@ -22,8 +25,19 @@ function compile(gl: WebGLRenderingContext, type: number, src: string): WebGLSha
   return sh;
 }
 
+const MOD_UNIFORMS: { id: ModuleId; name: string }[] = [
+  { id: 'pot', name: 'uModPot' },
+  { id: 'rip', name: 'uModRip' },
+  { id: 'warp', name: 'uModWarp' },
+  { id: 'flow', name: 'uModFlow' },
+  { id: 'grade', name: 'uModGrade' },
+  { id: 'core', name: 'uModCore' },
+  { id: 'vig', name: 'uModVig' },
+  { id: 'idle', name: 'uModIdle' },
+];
+
 /**
- * Fullscreen WebGL field. Fingertips are uniforms that drive the math.
+ * Fullscreen WebGL field. Fingertips + module enables drive the math.
  */
 export class FingerFieldRenderer {
   readonly canvas: HTMLCanvasElement;
@@ -35,8 +49,17 @@ export class FingerFieldRenderer {
   private uTipCount: WebGLUniformLocation;
   private uTips: WebGLUniformLocation[] = [];
   private uTipEnergy: WebGLUniformLocation[] = [];
-  private uTint: WebGLUniformLocation;
-  private tint: [number, number, number] = [0.24, 0.72, 1.0];
+  private uMods = new Map<ModuleId, WebGLUniformLocation>();
+  private enables: ModuleEnables = {
+    pot: true,
+    rip: true,
+    warp: true,
+    flow: true,
+    grade: true,
+    core: true,
+    vig: true,
+    idle: true,
+  };
   private start = performance.now();
 
   constructor(canvas: HTMLCanvasElement) {
@@ -79,9 +102,11 @@ export class FingerFieldRenderer {
     this.uTime = ut;
     this.uTipCount = uc;
 
-    const utint = gl.getUniformLocation(prog, 'uTint');
-    if (!utint) throw new Error('missing uTint');
-    this.uTint = utint;
+    for (const m of MOD_UNIFORMS) {
+      const u = gl.getUniformLocation(prog, m.name);
+      if (!u) throw new Error(`missing ${m.name}`);
+      this.uMods.set(m.id, u);
+    }
 
     for (let i = 0; i < 10; i++) {
       const tip = gl.getUniformLocation(prog, `uTips[${i}]`);
@@ -92,6 +117,10 @@ export class FingerFieldRenderer {
     }
 
     this.resize();
+  }
+
+  setModules(enables: ModuleEnables): void {
+    this.enables = { ...enables };
   }
 
   resize(): void {
@@ -107,10 +136,6 @@ export class FingerFieldRenderer {
     this.gl.viewport(0, 0, this.canvas.width, this.canvas.height);
   }
 
-  setTint(r: number, g: number, b: number): void {
-    this.tint = [r, g, b];
-  }
-
   render(tips: TipUniform[]): void {
     const gl = this.gl;
     this.resize();
@@ -122,7 +147,11 @@ export class FingerFieldRenderer {
 
     gl.uniform2f(this.uResolution, this.canvas.width, this.canvas.height);
     gl.uniform1f(this.uTime, (performance.now() - this.start) / 1000);
-    gl.uniform3f(this.uTint, this.tint[0], this.tint[1], this.tint[2]);
+
+    for (const m of MOD_UNIFORMS) {
+      const loc = this.uMods.get(m.id);
+      if (loc) gl.uniform1f(loc, this.enables[m.id] ? 1 : 0);
+    }
 
     const n = Math.min(10, tips.length);
     gl.uniform1f(this.uTipCount, n);

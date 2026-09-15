@@ -1,39 +1,28 @@
+import {
+  FieldModules,
+  FIELD_MODULE_DEFS,
+  type ModuleId,
+  type ModulesState,
+} from '../field/FieldModules';
+
 const LS_OPEN = 'fpw.paletteOpen';
-const LS_COLOR = 'fpw.paletteColor';
 
-export const PALETTE_COLORS: { id: string; hex: string; label: string }[] = [
-  { id: 'R', hex: '#ff3b3b', label: 'Red' },
-  { id: 'O', hex: '#ff8a1f', label: 'Orange' },
-  { id: 'Y', hex: '#ffd84a', label: 'Yellow' },
-  { id: 'G', hex: '#3dff8a', label: 'Green' },
-  { id: 'B', hex: '#3db8ff', label: 'Blue' },
-  { id: 'I', hex: '#6a5cff', label: 'Indigo' },
-  { id: 'V', hex: '#c84dff', label: 'Violet' },
-  { id: 'W', hex: '#f4f6ff', label: 'White' },
-  { id: 'K', hex: '#1a1c22', label: 'Black' },
-];
-
-function hexToRgb01(hex: string): [number, number, number] {
-  const h = hex.replace('#', '');
-  const n = parseInt(h.length === 3 ? h.split('').map((c) => c + c).join('') : h, 16);
-  return [((n >> 16) & 255) / 255, ((n >> 8) & 255) / 255, (n & 255) / 255];
-}
-
-type TintListener = (rgb: [number, number, number], hex: string) => void;
+type ChangeFn = (state: ModulesState) => void;
 
 /**
- * Left-docked minimizable palette — minimalist / futuristic HUD.
+ * Left rail: programmable field modules (no color swatches).
+ * Click = toggle. ⎌ = reset all to factory defaults (same look as original all-on field).
  */
 export class PalettePanel {
   private root: HTMLElement;
   private rail: HTMLElement;
   private open: boolean;
-  private colorHex: string;
-  private listeners = new Set<TintListener>();
+  private modules: FieldModules;
+  private listeners = new Set<ChangeFn>();
 
-  constructor() {
+  constructor(modules?: FieldModules) {
+    this.modules = modules ?? new FieldModules();
     this.open = localStorage.getItem(LS_OPEN) !== '0';
-    this.colorHex = localStorage.getItem(LS_COLOR) || PALETTE_COLORS[4].hex;
 
     this.root = document.createElement('aside');
     this.root.id = 'palette-root';
@@ -42,8 +31,8 @@ export class PalettePanel {
     const toggle = document.createElement('button');
     toggle.type = 'button';
     toggle.id = 'palette-toggle';
-    toggle.title = 'Palette';
-    toggle.setAttribute('aria-label', 'Toggle palette');
+    toggle.title = 'Modules';
+    toggle.setAttribute('aria-label', 'Toggle modules');
     toggle.innerHTML = '<span class="palette-chevron"></span>';
     toggle.addEventListener('click', () => this.setOpen(!this.open));
 
@@ -52,49 +41,51 @@ export class PalettePanel {
 
     const head = document.createElement('div');
     head.className = 'palette-head';
-    head.innerHTML = '<span class="palette-mark"></span><span>PALETTE</span>';
+    head.innerHTML = '<span class="palette-mark"></span><span>MOD</span>';
     this.rail.appendChild(head);
 
     const wells = document.createElement('div');
     wells.className = 'palette-wells';
-    for (const c of PALETTE_COLORS) {
+    for (const d of FIELD_MODULE_DEFS) {
       const btn = document.createElement('button');
       btn.type = 'button';
-      btn.className = 'palette-well';
-      btn.dataset.hex = c.hex;
-      btn.title = c.label;
-      btn.setAttribute('aria-label', c.label);
-      btn.style.setProperty('--well', c.hex);
-      btn.innerHTML = `<span class="palette-well-core"></span><span class="palette-well-id">${c.id}</span>`;
-      btn.addEventListener('click', () => this.setColor(c.hex));
+      btn.className = 'palette-mod';
+      btn.dataset.id = d.id;
+      btn.title = `${d.title} — ${d.blurb}\n(click toggle; defaults restore full look)`;
+      btn.setAttribute('aria-label', d.title);
+      btn.innerHTML = `<span class="palette-mod-ring"></span><span class="palette-mod-id">${d.label}</span>`;
+      btn.addEventListener('click', () => {
+        this.modules.toggle(d.id as ModuleId);
+      });
       wells.appendChild(btn);
     }
     this.rail.appendChild(wells);
 
-    const swatch = document.createElement('div');
-    swatch.className = 'palette-active';
-    swatch.id = 'palette-active-swatch';
-    this.rail.appendChild(swatch);
+    const reset = document.createElement('button');
+    reset.type = 'button';
+    reset.className = 'palette-reset';
+    reset.title = 'Reset all modules to factory defaults';
+    reset.textContent = '↺';
+    reset.addEventListener('click', () => this.modules.resetToDefaults());
+    this.rail.appendChild(reset);
 
     this.root.appendChild(toggle);
     this.root.appendChild(this.rail);
     document.body.appendChild(this.root);
 
-    this.syncWells();
-    this.emit();
+    this.modules.onChange((s) => {
+      this.sync(s);
+      for (const fn of this.listeners) fn(s);
+    });
   }
 
-  getTint(): [number, number, number] {
-    return hexToRgb01(this.colorHex);
+  getModules(): FieldModules {
+    return this.modules;
   }
 
-  getHex(): string {
-    return this.colorHex;
-  }
-
-  onChange(fn: TintListener): () => void {
+  onChange(fn: ChangeFn): () => void {
     this.listeners.add(fn);
-    fn(this.getTint(), this.colorHex);
+    fn(this.modules.get());
     return () => this.listeners.delete(fn);
   }
 
@@ -104,25 +95,12 @@ export class PalettePanel {
     this.root.classList.toggle('collapsed', !open);
   }
 
-  private setColor(hex: string): void {
-    this.colorHex = hex;
-    localStorage.setItem(LS_COLOR, hex);
-    this.syncWells();
-    this.emit();
-  }
-
-  private syncWells(): void {
-    const wells = this.rail.querySelectorAll('.palette-well');
-    wells.forEach((el) => {
+  private sync(s: ModulesState): void {
+    this.rail.querySelectorAll('.palette-mod').forEach((el) => {
       const btn = el as HTMLButtonElement;
-      btn.classList.toggle('on', btn.dataset.hex === this.colorHex);
+      const id = btn.dataset.id as ModuleId;
+      btn.classList.toggle('on', !!s[id]?.enabled);
+      btn.classList.toggle('off', !s[id]?.enabled);
     });
-    const sw = this.rail.querySelector('#palette-active-swatch') as HTMLElement | null;
-    if (sw) sw.style.setProperty('--active', this.colorHex);
-  }
-
-  private emit(): void {
-    const rgb = this.getTint();
-    for (const fn of this.listeners) fn(rgb, this.colorHex);
   }
 }
